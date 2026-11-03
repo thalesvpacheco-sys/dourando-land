@@ -1,0 +1,16 @@
+node_modules/
+.env
+.env.*
+!.env.example
+!.env.demo
+!.env.static
+server/storage/
+storage/
+web/dist/
+web/dist-demo/
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+coverage/

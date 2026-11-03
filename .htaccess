@@ -1,0 +1,16 @@
+# Raiz do repositório = public_html (deploy via git da Hostinger).
+# O site publicado fica em /site; o código-fonte (server, web, shared, docs, e2e, .git) nunca é servido.
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # HTTPS obrigatório
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  # Tudo é atendido a partir de /site (reescrita interna)
+  RewriteCond %{REQUEST_URI} !^/site/
+  RewriteRule ^(.*)$ site/$1 [L]
+</IfModule>

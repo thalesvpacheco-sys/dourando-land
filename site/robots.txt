@@ -1,0 +1,4 @@
+# Conteúdo atual = demonstração com dados fictícios. Não indexar até haver dados reais.
+# Para liberar a indexação: troque por "Disallow: /painel" e adicione "Sitemap: https://SEU-DOMINIO/sitemap.xml".
+User-agent: *
+Disallow: /
