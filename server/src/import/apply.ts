@@ -251,9 +251,10 @@ async function attachFiles(trx: Knex, itemId: string, u: UnitPlan, src: Inventor
       if (f.kind !== 'description') { await trx('import_files').insert({ ...base, target: 'skipped', note: f.kind === 'video' ? 'vídeo: enviar para a galeria manualmente' : 'arquivo compactado/outro: revisar' }); r.files_skipped.push({ path: f.path, reason: f.kind }); }
       if (f.kind !== 'description') continue;
     }
-    if (!src.complete) { r.files_skipped.push({ path: f.path, reason: 'origem sem o arquivo (prévia)' }); continue; }
+    // Pacote (origem incompleta): anexa o que veio (ex.: fotos copiadas para files/) e pula o resto sem registrar,
+    // para que uma importação futura com a pasta completa anexe os documentos que faltaram, sem duplicar os já anexados.
     const buf = await src.read(f.path);
-    if (!buf) { r.files_skipped.push({ path: f.path, reason: 'não encontrado' }); continue; }
+    if (!buf || (buf as any).__textOnly) { r.files_skipped.push({ path: f.path, reason: src.complete ? 'não encontrado' : 'origem sem o arquivo (pacote)' }); continue; }
     const ext = extOf(f.path);
     if (f.kind === 'image') {
       if (ctx.entityType !== 'opportunity') { await trx('import_files').insert({ ...base, target: 'skipped', note: 'imagem de prospecção: anexar após conversão' }); continue; }
