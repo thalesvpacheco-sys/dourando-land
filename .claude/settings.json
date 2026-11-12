@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "ClaudeInChromeDomain(areas.douradoimob.com.br)"
+    ]
+  }
+}

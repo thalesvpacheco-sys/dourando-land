@@ -7,6 +7,7 @@ import {
 import { useSession } from '../lib/session';
 import { api, ApiError, DEMO, FRAMED, getAttribution, openFile, track, NEW_TAB } from '../lib/api';
 import MapView, { type AreaFeature } from '../components/MapView';
+import { Google3DView, HAS_GOOGLE_3D } from '../components/EarthTools';
 import { Empty, Field, Loading, Modal, ValidationBadge, useToast } from '../components/ui';
 import { statusLabel, type PublicArea } from './Ficha';
 
@@ -167,6 +168,20 @@ export default function Detail() {
               {a.location?.precision === 'exact' ? 'Perímetro informado pelo levantamento.' : a.location?.precision === 'approximate' ? 'Localização aproximada. O perímetro exato é apresentado no atendimento.' : 'Exibida apenas a região. Detalhes no atendimento.'}
             </p>
           </section>
+
+          {/* Vista 3D respeita o sigilo da localização: perímetro só quando a área é pública com precisão exata;
+              aproximada mostra a região em volta do ponto público (já deslocado); só região, não mostra. */}
+          {HAS_GOOGLE_3D && a.location?.point && a.location.precision !== 'region' && (
+            <section className="block">
+              <h2>Vista 3D</h2>
+              <Google3DView quiet lat={a.location.point[1]} lng={a.location.point[0]} name={a.code}
+                areaM2={a.location.precision === 'exact' ? a.area_m2 : a.location.radius_m ? (a.location.radius_m * 2) ** 2 : null}
+                geometry={a.location.precision === 'exact' ? a.location.polygon : null} />
+              <p className="small muted" style={{ marginTop: '0.5rem' }}>
+                {a.location.precision === 'exact' ? 'Imagem 3D do Google com o perímetro da área. Arraste para girar; role para aproximar.' : 'Imagem 3D da região. A posição exata é apresentada no atendimento.'}
+              </p>
+            </section>
+          )}
 
           <section className="block">
             <h2>Condições comerciais</h2>

@@ -4,6 +4,8 @@ import { DEMO, downloadFile, getToken } from '../lib/api';
 import { useToast } from './ui';
 
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+/** Há chave do Google Maps neste build (a vista 3D pode ser exibida). */
+export const HAS_GOOGLE_3D = !!GMAPS_KEY && !DEMO;
 
 /**
  * Google Earth: não há API de incorporação do Earth Web. A integração é feita por:
@@ -57,7 +59,7 @@ function loadGoogleMaps() {
 }
 
 /** Vista 3D fotorrealista com o perímetro (Google 3D Maps). Sem chave, explica como ativar e oferece o Google Earth. */
-export function Google3DView({ lat, lng, areaM2, geometry, name }: { lat: number; lng: number; areaM2?: number | null; geometry?: any; name: string }) {
+export function Google3DView({ lat, lng, areaM2, geometry, name, quiet }: { lat: number; lng: number; areaM2?: number | null; geometry?: any; name: string; /** portal público: sem chave ou com erro, não mostra nada */ quiet?: boolean }) {
   const el = useRef<HTMLDivElement>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
@@ -66,19 +68,30 @@ export function Google3DView({ lat, lng, areaM2, geometry, name }: { lat: number
     loadGoogleMaps().then(async (google) => {
       if (cancelled || !el.current) return;
       const { Map3DElement, Polygon3DElement } = await google.maps.importLibrary('maps3d');
-      const map = new Map3DElement({ center: { lat, lng, altitude: 0 }, range: areaM2 ? Math.max(900, Math.sqrt(areaM2) * 3.2) : 2500, tilt: 58, heading: 20, mode: 'SATELLITE' });
+      // A câmera mira um ponto com altitude absoluta: com 0 (nível do mar) ela fica rente ao chão no Planalto Central
+      // (~800 m) e o perímetro some. Usa a altitude do terreno (Elevation API); sem ela, uma média do Centro-Oeste.
+      let ground = 650;
+      try {
+        const { ElevationService } = await google.maps.importLibrary('elevation');
+        const r = await new ElevationService().getElevationForLocations({ locations: [{ lat, lng }] });
+        if (Number.isFinite(r.results?.[0]?.elevation)) ground = r.results[0].elevation;
+      } catch { /* Elevation API fora das restrições da chave: segue com a média */ }
+      if (cancelled || !el.current) return;
+      const map = new Map3DElement({ center: { lat, lng, altitude: ground }, range: areaM2 ? Math.max(900, Math.sqrt(areaM2) * 3.4) : 2500, tilt: 55, heading: 20, mode: 'SATELLITE' });
       const rings: number[][][] = geometry?.type === 'Polygon' ? [geometry.coordinates[0]] : geometry?.type === 'MultiPolygon' ? geometry.coordinates.map((p: any) => p[0]) : [];
       for (const ring of rings) {
         const poly = new Polygon3DElement({ strokeColor: '#0a0a0a', strokeWidth: 3, fillColor: 'rgba(248,184,23,0.35)', altitudeMode: 'CLAMP_TO_GROUND', drawsOccludedSegments: true });
         poly.outerCoordinates = ring.map(([x, y]) => ({ lat: y, lng: x }));
         map.append(poly);
       }
+      map.style.cssText = 'display:block;width:100%;height:100%';
       el.current.replaceChildren(map);
     }).catch((e) => setErr(e.message));
     return () => { cancelled = true; };
   }, [lat, lng, areaM2, geometry]);
 
   if (!GMAPS_KEY || err) {
+    if (quiet) return null;
     return (
       <div className="panel" style={{ background: 'var(--paper)' }}>
         <b>Vista 3D</b>
