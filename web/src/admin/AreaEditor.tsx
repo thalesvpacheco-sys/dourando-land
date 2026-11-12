@@ -126,6 +126,14 @@ export default function AreaEditor() {
           ))}
         </nav>
         <div className="stack">
+          {/* Vista 3D logo na abertura da área (antes ficava só na etapa 2) */}
+          {step === 1 && o.lat != null && (
+            <div className="panel stack">
+              <h2>Vista 3D</h2>
+              <Google3DView lat={o.lat} lng={o.lng} areaM2={o.geometry?.area_m2 ?? o.area_m2} geometry={o.geometry?.geometry} name={o.code} />
+              {!o.geometry && <p className="small muted" style={{ margin: 0 }}>Sem perímetro: a vista mostra o ponto. Desenhe ou importe o perímetro na etapa 2 para vê-lo em 3D.</p>}
+            </div>
+          )}
           {step === 1 && (
             <div className="panel stack">
               <h2>Identificação</h2>
