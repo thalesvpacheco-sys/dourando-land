@@ -138,6 +138,7 @@ function LinkModal({ link, onClose }: { link: { title: string; url: string; expi
 }
 
 function InviteModal({ roles, onClose, onDone }: { roles: string[]; onClose: () => void; onDone: (r: any) => void }) {
+  const mfaOn = !!useSession().me?.mfaRequired;
   const [f, setF] = useState({ name: '', email: '', phone: '', role: 'broker', partner_company_id: '', opportunity_code: '' });
   const [partners, setPartners] = useState<any[]>([]);
   const [err, setErr] = useState('');
@@ -158,7 +159,7 @@ function InviteModal({ roles, onClose, onDone }: { roles: string[]; onClose: () 
         {f.role === 'broker' && <Field label="WhatsApp (DDD + número)"><input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>}
         {f.role === 'buyer' && <Field label="Empresa parceira"><select required value={f.partner_company_id} onChange={(e) => setF({ ...f, partner_company_id: e.target.value })}><option value="">Selecione</option>{partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>}
         {f.role === 'owner' && <Field label="Código da área" hint="O proprietário verá só esta área e poderá enviar documentos."><input required placeholder="DOU-GO-0001" value={f.opportunity_code} onChange={(e) => setF({ ...f, opportunity_code: e.target.value })} /></Field>}
-        {MFA_ROLES.includes(f.role) && <p className="small muted" style={{ margin: 0 }}>Este perfil precisa ativar a verificação em duas etapas no primeiro acesso.</p>}
+        {mfaOn && MFA_ROLES.includes(f.role) && <p className="small muted" style={{ margin: 0 }}>Este perfil precisa ativar a verificação em duas etapas no primeiro acesso.</p>}
         {err && <p className="error-text">{err}</p>}
         <div className="row"><button className="btn gold" disabled={busy}>{busy ? 'Criando…' : 'Criar convite'}</button><button type="button" className="btn ghost" onClick={onClose}>Cancelar</button></div>
       </form>
@@ -186,7 +187,7 @@ function EditUserModal({ u, roles, onClose, onDone, onLink }: { u: any; roles: s
         <div className="row"><button className="btn" onClick={() => act(async () => { await api(`/api/admin/users/${u.id}`, { method: 'PATCH', body: { name: f.name, ...(f.role !== u.role ? { role: f.role } : {}) } }); toast('Usuário atualizado'); onDone(); })}>Salvar</button></div>
         <div className="stack-s" style={{ borderTop: '1px solid var(--line-2)', paddingTop: '0.8rem' }}>
           {u.active && <button className="btn ghost small" onClick={() => act(async () => { const r = await api(`/api/admin/users/${u.id}/link`, { method: 'POST' }); onLink({ title: r.kind === 'invite' ? 'Novo link de convite' : 'Link para redefinir a senha', ...r }); })}>{u.has_password ? 'Gerar link para redefinir a senha' : 'Gerar novo link de convite'}</button>}
-          {u.mfa_enabled && !self && <button className="btn ghost small" onClick={() => act(async () => { await api(`/api/admin/users/${u.id}/reset-mfa`, { method: 'POST' }); toast('Verificação em duas etapas zerada. A pessoa configura de novo no próximo acesso.'); onDone(); })}>Zerar duas etapas (celular perdido)</button>}
+          {me?.mfaRequired && u.mfa_enabled && !self && <button className="btn ghost small" onClick={() => act(async () => { await api(`/api/admin/users/${u.id}/reset-mfa`, { method: 'POST' }); toast('Verificação em duas etapas zerada. A pessoa configura de novo no próximo acesso.'); onDone(); })}>Zerar duas etapas (celular perdido)</button>}
           {!self && <button className={u.active ? 'btn danger small' : 'btn ghost small'} onClick={() => act(async () => { await api(`/api/admin/users/${u.id}`, { method: 'PATCH', body: { active: !u.active } }); toast(u.active ? 'Acesso desativado e sessões encerradas' : 'Acesso reativado'); onDone(); })}>{u.active ? 'Desativar acesso' : 'Reativar acesso'}</button>}
         </div>
       </div>
@@ -201,20 +202,21 @@ export function Users() {
   const [edit, setEdit] = useState<any>(null);
   const [link, setLink] = useState<any>(null);
   const manage = !DEMO && can('user', 'create');
+  const mfaOn = !!me?.mfaRequired;
   const roles = me?.user.role === 'platform_admin' ? Object.keys(ROLES) : ['dourado_admin', 'capture_manager', 'broker', 'owner', 'buyer'];
   return (
     <>
       <PageHeader title="Usuários">{manage && <button className="btn gold" onClick={() => setInvite(true)}>Convidar usuário</button>}</PageHeader>
       <p className="muted small" style={{ marginTop: '-0.5rem' }}>{DEMO ? 'Usuários fictícios da demonstração.' : 'O acesso é por convite: cada pessoa define a própria senha. Desativar encerra as sessões na hora.'}</p>
       {loading ? <Loading /> : (
-        <div className="table-wrap"><table className="data"><thead><tr><th>Nome</th><th>Perfil</th><th>Organização</th><th>Duas etapas</th><th>Último acesso</th><th>Situação</th>{manage && <th />}</tr></thead>
+        <div className="table-wrap"><table className="data"><thead><tr><th>Nome</th><th>Perfil</th><th>Organização</th>{mfaOn && <th>Duas etapas</th>}<th>Último acesso</th><th>Situação</th>{manage && <th />}</tr></thead>
           <tbody>{data.items.map((u: any) => {
             const [cls, label] = userStatus(u);
             return <tr key={u.id} style={{ opacity: u.active ? 1 : 0.55 }}>
               <td><b>{u.name}</b><div className="small muted">{u.email}</div></td>
               <td>{ROLES[u.role as Role]}</td>
               <td className="small">{u.org_name}</td>
-              <td>{u.mfa_enabled ? <span className="badge ok">Ativa</span> : MFA_ROLES.includes(u.role) ? <span className="badge bad">Obrigatória — pendente</span> : <span className="muted small">Opcional</span>}</td>
+              {mfaOn && <td>{u.mfa_enabled ? <span className="badge ok">Ativa</span> : MFA_ROLES.includes(u.role) ? <span className="badge bad">Obrigatória — pendente</span> : <span className="muted small">Opcional</span>}</td>}
               <td className="small">{u.last_login_at ? new Date(u.last_login_at).toLocaleDateString('pt-BR') : '—'}</td>
               <td><span className={`badge ${cls}`}>{label}</span></td>
               {manage && <td><button className="btn link small" onClick={() => setEdit(u)}>Gerenciar</button></td>}
@@ -258,7 +260,7 @@ export function Account() {
           {err && <p className="error-text">{err}</p>}
           <div><button className="btn" disabled={busy}>Alterar senha</button></div>
         </form>
-        <div className="panel stack">
+        {me?.mfaRequired && <div className="panel stack">
           <h2>Verificação em duas etapas</h2>
           {codes ? <RecoveryCodes codes={codes} onContinue={() => setCodes(null)} />
             : settingUp ? <MfaSetup onDone={(c) => { setSettingUp(false); setCodes(c); void login(); }} />
@@ -272,7 +274,7 @@ export function Account() {
               <p className="small muted" style={{ margin: 0 }}>Protege sua conta mesmo se a senha vazar. Você vai precisar de um aplicativo autenticador no celular.</p>
               <div><button className="btn" onClick={() => setSettingUp(true)}>Ativar</button></div>
             </>}
-        </div>
+        </div>}
       </div>
     </>
   );

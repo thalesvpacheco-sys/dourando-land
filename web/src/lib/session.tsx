@@ -5,6 +5,8 @@ export interface Me {
   user: { id: string; name: string; email: string; role: string; orgId: string; brokerId: string | null; partnerCompanyIds: string[]; mfa?: boolean };
   org: { id: string; name: string };
   permissions: Record<string, { actions: string[]; scope: string }>;
+  /** Verificação em duas etapas ligada no servidor (REQUIRE_MFA). Desligada, as telas não mostram nada sobre ela. */
+  mfaRequired?: boolean;
 }
 
 interface Ctx {

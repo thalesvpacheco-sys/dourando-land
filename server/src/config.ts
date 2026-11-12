@@ -26,8 +26,8 @@ export const config = {
   // Segredo de assinatura das sessões. WINGSBR_JWT_SECRET continua aceito por compatibilidade.
   jwtSecret: env.AUTH_JWT_SECRET || env.WINGSBR_JWT_SECRET || required('AUTH_JWT_SECRET', 'dev-secret-nao-usar-em-producao'),
   jwtIssuer: env.AUTH_JWT_ISSUER ?? env.WINGSBR_JWT_ISSUER ?? 'wingsbr',
-  // Duas etapas para administradores: ligado por padrão em produção.
-  requireMfa: env.REQUIRE_MFA ? env.REQUIRE_MFA === 'true' : isProd,
+  // Duas etapas (aplicativo autenticador): desligado. REQUIRE_MFA=true volta a exigir de administradores.
+  requireMfa: env.REQUIRE_MFA === 'true',
   sessionHours: Number(env.SESSION_HOURS ?? 12),
   cookieSecure: env.COOKIE_SECURE ? env.COOKIE_SECURE === 'true' : isProd,
   smtpUrl: env.SMTP_URL || null,

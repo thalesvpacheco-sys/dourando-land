@@ -70,7 +70,7 @@ router.get('/session', optionalAuth, ah(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!req.user) return void res.json({ authenticated: false });
   const org = await db('organizations').where({ id: req.user.orgId }).select('id', 'name', 'slug', 'kind', 'central_whatsapp').first();
-  res.json({ authenticated: true, user: req.user, org, permissions: MATRIX[req.user.role] });
+  res.json({ authenticated: true, user: req.user, org, permissions: MATRIX[req.user.role], mfaRequired: config.requireMfa });
 }));
 
 router.post('/login', loginLimiter, ah(async (req, res) => {
@@ -81,8 +81,11 @@ router.post('/login', loginLimiter, ah(async (req, res) => {
   if (isLocked(u)) throw new HttpError(429, 'Acesso bloqueado temporariamente por tentativas incorretas. Tente de novo em alguns minutos.');
   if (!ok) { await registerFailure(req, u); throw new HttpError(401, BAD_LOGIN); }
 
-  if (u.mfa_enabled) return void res.json({ step: 'mfa', challenge: signChallenge(u) });
-  if (PRIVILEGED.includes(u.role) && config.requireMfa) return void res.json({ step: 'mfa_setup', challenge: signChallenge(u) });
+  // Com REQUIRE_MFA desligado o login é só com senha, mesmo para quem já tinha ativado.
+  if (config.requireMfa) {
+    if (u.mfa_enabled) return void res.json({ step: 'mfa', challenge: signChallenge(u) });
+    if (PRIVILEGED.includes(u.role)) return void res.json({ step: 'mfa_setup', challenge: signChallenge(u) });
+  }
   await startSession(req, res, u, false);
   res.json({ step: 'done' });
 }));
