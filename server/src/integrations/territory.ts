@@ -52,7 +52,7 @@ export function layerStatus(loaded: Awaited<ReturnType<typeof loadedDatasets>> =
         key: k, name: meta.label, short: meta.short, group: meta.group, color: meta.color, official_url: meta.official, source: meta.source,
         // demonstração só existe para as duas camadas com gerador fictício
         status: mode === 'demo' ? (k === 'sigef' || k === 'car' ? 'simulated' : 'pending') : data || (wfs?.url && wfs?.layer) ? 'implemented' : 'pending',
-        ufs: data?.ufs ?? [], features: data?.features ?? 0, loaded_at: data?.loaded_at ?? null,
+        ufs: data?.ufs ?? [], features: data?.features ?? 0, loaded_at: data?.loaded_at ?? null, loaded_sources: data?.sources ?? [],
       };
     }),
     registry: {
@@ -65,18 +65,18 @@ export function layerStatus(loaded: Awaited<ReturnType<typeof loadedDatasets>> =
 /** Normaliza atributos de bases diferentes para o mesmo formato (mantém os originais em `raw`). */
 export function normalize(layer: string, p: Record<string, any>): TerritoryProps & { raw: any } {
   const pick = (...keys: string[]) => { for (const k of keys) { const v = p[k] ?? p[k.toUpperCase()]; if (v !== undefined && v !== null && v !== '') return v; } return null; };
-  const area = pick('area_ha', 'num_area', 'area', 'area_imovel', 'nu_area', 'qtd_area_p', 'area_hecta', 'areaha');
+  const area = pick('area_ha', 'num_area', 'area', 'area_imovel', 'nu_area', 'qtd_area_p', 'area_hecta', 'areaha', 'areahaalb', 'superficie');
   return {
     layer,
-    codigo: String(pick('parcela_codigo', 'parcela_co', 'num_certif', 'cod_imovel', 'codigo_imo', 'codigo', 'cod_tema', 'id') ?? ''),
-    nome: pick('nome_area', 'nome_imovel', 'nome_imove', 'nome', 'nom_tema', 'nm_uc', 'terrai_nom'),
+    codigo: String(pick('parcela_codigo', 'parcela_co', 'num_certif', 'cod_imovel', 'codigo_imo', 'codigo', 'cod_tema', 'terrai_cod', 'cnuc', 'id') ?? ''),
+    nome: pick('nome_area', 'nome_imovel', 'nome_imove', 'nome_proje', 'nome', 'nom_tema', 'nm_uc', 'nomeuc', 'terrai_nom'),
     area_ha: area != null ? Number(area) : null,
     municipio: pick('municipio_', 'municipio', 'nom_munici', 'municipio_nome'),
     uf: pick('uf', 'uf_id', 'cod_estado', 'estado'),
-    situacao: pick('situacao_i', 'situacao', 'des_condic', 'ind_status', 'status'),
+    situacao: pick('situacao_i', 'situacao', 'des_condic', 'condicao', 'fase_ti', 'categoria_', 'ind_status', 'status_imovel', 'status'),
     matricula: pick('registro_m', 'matricula', 'matriculas'),
     cns_serventia: pick('registro_d', 'cns', 'cns_serventia'),
-    data_referencia: pick('data_aprov', 'data_submi', 'dat_criaca', 'data_certificado'),
+    data_referencia: pick('data_aprov', 'data_submi', 'dat_criaca', 'dat_criacao', 'data_certificado', 'data_referencia'),
     fonte: `${SOURCES[layer as Layer]?.name ?? TERRITORY_LAYERS[layer as TerritoryLayer]?.label ?? layer} — WFS`,
     raw: p,
   };
@@ -106,26 +106,27 @@ async function fetchWfs(layer: Layer, uf: string | null, bbox: [number, number, 
   return { status: 'implemented' as const, features };
 }
 
-const toFeature = (r: any, loadedAt?: string) => ({
+// A fonte mostrada é a da carga (ex.: "cópia publicada pelo IBAMA"), não a fonte padrão da camada: quem consulta precisa saber de onde veio.
+const toFeature = (r: any, loadedAt?: string, sourceName?: string) => ({
   type: 'Feature', id: Number(r.id), geometry: r.geometry,
   properties: {
     id: Number(r.id), layer: r.layer, codigo: r.code ?? '', nome: r.name, area_ha: r.area_ha, municipio: r.municipio, uf: r.uf, situacao: r.situacao,
     matricula: r.matricula, cns_serventia: r.cns_serventia, data_referencia: r.data_referencia,
-    fonte: `${TERRITORY_LAYERS[r.layer as TerritoryLayer]?.source ?? r.layer}${loadedAt ? ` — base carregada em ${new Date(loadedAt).toLocaleDateString('pt-BR')}` : ''}`,
+    fonte: `${sourceName ?? TERRITORY_LAYERS[r.layer as TerritoryLayer]?.source ?? r.layer}${loadedAt ? ` — carregada na plataforma em ${new Date(loadedAt).toLocaleDateString('pt-BR')}` : ''}`,
   },
 });
 const FEATURE_COLS = 'id, layer, uf, code, name, area_ha, municipio, situacao, matricula, cns_serventia, data_referencia';
 
 /** Consulta na base local (PostGIS). Retorna null se a camada ainda não foi carregada. */
 async function localFeatures(layer: string, bbox: [number, number, number, number]) {
-  const ds = await db('territory_datasets').where({ layer }).select('loaded_at').first();
+  const ds = await db('territory_datasets').where({ layer }).select('loaded_at', 'source_name').first();
   if (!ds) return null;
   const { rows } = await db.raw(
     `SELECT ${FEATURE_COLS}, ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.00001), 6)::json AS geometry
      FROM territory_features WHERE layer = ? AND geom && ST_MakeEnvelope(?, ?, ?, ?, 4326) LIMIT 1500`,
     [layer, ...bbox],
   );
-  return rows.map((r: any) => toFeature(r, ds.loaded_at));
+  return rows.map((r: any) => toFeature(r, ds.loaded_at, ds.source_name));
 }
 
 export async function getFeatures(layer: string, bbox: [number, number, number, number], uf: string | null) {
@@ -327,8 +328,8 @@ export async function radarSearch(f: RadarFilter) {
   if (f.exclude_restrictions && restr.length) qb.whereRaw(`NOT EXISTS (SELECT 1 FROM territory_features r WHERE r.layer = ANY(?) AND r.geom && t.geom AND ST_Intersects(r.geom, t.geom))`, [restr]);
   const rows = await qb;
   return {
-    loaded: true, source: TERRITORY_LAYERS[f.layer as TerritoryLayer].source, loaded_at: ds.loaded_at, restrictions_checked: restr,
-    items: rows.map((r: any) => ({ ...toFeature(r, ds.loaded_at), center: [r.lng, r.lat] })),
+    loaded: true, source: ds.source_name ?? TERRITORY_LAYERS[f.layer as TerritoryLayer].source, loaded_at: ds.loaded_at, restrictions_checked: restr,
+    items: rows.map((r: any) => ({ ...toFeature(r, ds.loaded_at, ds.source_name), center: [r.lng, r.lat] })),
   };
 }
 

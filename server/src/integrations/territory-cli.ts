@@ -17,7 +17,7 @@ import { TERRITORY_LAYER_KEYS, UFS } from '@dl/shared';
 import { db, migrationConfig } from '../db/knex.js';
 import { normalize } from './territory.js';
 
-export async function importShapefile(opts: { layer: string; uf: string; file: string; encoding?: string; sourceName?: string; ufField?: boolean }) {
+export async function importShapefile(opts: { layer: string; uf: string; file: string; encoding?: string; sourceName?: string; ufField?: boolean; append?: boolean }) {
   const { layer, uf } = opts;
   if (!TERRITORY_LAYER_KEYS.includes(layer as any)) throw new Error(`Camada desconhecida: ${layer}. Use: ${TERRITORY_LAYER_KEYS.join(', ')}`);
   if (!UFS.includes(uf as any)) throw new Error(`UF inválida: ${uf}`);
@@ -35,12 +35,21 @@ export async function importShapefile(opts: { layer: string; uf: string; file: s
     shp = all[0];
   }
   try {
-    const prj = shp.replace(/\.shp$/i, '.prj');
-    if (fs.existsSync(prj) && /^\s*PROJCS/i.test(fs.readFileSync(prj, 'utf8'))) throw new Error('O shapefile está em coordenadas projetadas. Reprojete para geográficas (SIRGAS 2000 ou WGS 84).');
-    const source = await shapefile.open(shp, shp.replace(/\.shp$/i, '.dbf'), { encoding: opts.encoding ?? 'utf-8' });
+    let source: { read: () => Promise<{ done: boolean; value: any }> };
+    if (/\.(geo)?json$/i.test(shp)) {
+      // GeoJSON (ex.: baixado de um serviço ArcGIS/WFS oficial com scripts/baixar-bases.py), em coordenadas geográficas
+      const features: any[] = JSON.parse(fs.readFileSync(shp, 'utf8')).features ?? [];
+      let i = 0;
+      source = { read: async () => (i < features.length ? { done: false, value: features[i++] } : { done: true, value: undefined }) };
+    } else {
+      const prj = shp.replace(/\.shp$/i, '.prj');
+      if (fs.existsSync(prj) && /^\s*PROJCS/i.test(fs.readFileSync(prj, 'utf8'))) throw new Error('O shapefile está em coordenadas projetadas. Reprojete para geográficas (SIRGAS 2000 ou WGS 84).');
+      source = await shapefile.open(shp, shp.replace(/\.shp$/i, '.dbf'), { encoding: opts.encoding ?? 'utf-8' });
+    }
     let total = 0, skipped = 0;
     await db.transaction(async (trx) => {
-      await trx('territory_features').where({ layer, uf }).del();
+      // --append soma ao que já existe (ex.: SIGEF privado + público); sem ele, a carga substitui a camada/UF
+      if (!opts.append) await trx('territory_features').where({ layer, uf }).del();
       let batch: any[] = [];
       const flush = async () => {
         if (!batch.length) return;
@@ -49,7 +58,8 @@ export async function importShapefile(opts: { layer: string; uf: string; file: s
            SELECT ?, ?, x->>'code', x->>'name', (x->>'area_ha')::double precision, x->>'municipio', x->>'situacao', x->>'matricula', x->>'cns', x->>'data', x->'raw', g
            FROM (SELECT x, ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(x->>'geom'), 4326)), 3)) AS g FROM jsonb_array_elements(?::jsonb) x) s
            WHERE NOT ST_IsEmpty(g)`,
-          [layer, uf, JSON.stringify(batch)],
+          // algumas bases (ex.: FUNAI) trazem caracteres nulos nos textos, que o PostgreSQL recusa em jsonb
+          [layer, uf, JSON.stringify(batch, (_k, v) => (typeof v === 'string' ? v.replace(/\u0000/g, '') : v))],
         );
         batch = [];
       };
@@ -81,10 +91,10 @@ if (process.argv[1]?.endsWith('territory-cli.ts')) {
   const args = process.argv.slice(2);
   const opt = (k: string) => { const i = args.indexOf(`--${k}`); return i >= 0 ? args[i + 1] : undefined; };
   const [layer, uf, file] = [opt('layer'), opt('uf')?.toUpperCase(), opt('file')];
-  if (!layer || !uf || !file) { console.error('Uso: --layer <camada> --uf <UF> --file <arquivo .zip ou .shp> [--encoding latin1]'); process.exit(1); }
+  if (!layer || !uf || !file) { console.error('Uso: --layer <camada> --uf <UF> --file <arquivo .zip, .shp ou .geojson> [--encoding latin1] [--source "Nome da fonte"] [--append]'); process.exit(1); }
   await db.migrate.latest(migrationConfig);
   try {
-    const r = await importShapefile({ layer, uf, file, encoding: opt('encoding') });
+    const r = await importShapefile({ layer, uf, file, encoding: opt('encoding'), sourceName: opt('source'), append: args.includes('--append') });
     console.log(`Carregados ${r.total} registros de ${layer}/${uf}${r.skipped ? ` (${r.skipped} sem polígono ignorados)` : ''}.`);
   } catch (e: any) { console.error(`Falha: ${e.message}`); process.exitCode = 1; }
   await db.destroy();

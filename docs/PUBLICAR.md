@@ -34,7 +34,7 @@ O HTTPS é automático (Caddy). As migrações rodam ao iniciar.
 docker compose exec app npm run bootstrap -- --email voce@empresa.com --name "Seu Nome"
 ```
 
-Abra o link impresso (uso único), defina a senha e ative as duas etapas com um aplicativo autenticador. **Guarde os códigos de recuperação.** Depois, convide a equipe em **Usuários**. Tenha pelo menos dois administradores: quem perde o celular depende do outro para zerar as duas etapas.
+Abra o link impresso (uso único) e defina a senha. Depois, convide a equipe em **Usuários**. A verificação em duas etapas está desligada; para exigi-la de administradores, coloque `REQUIRE_MFA=true` no `.env` e rode `docker compose up -d`. Nesse caso, tenha pelo menos dois administradores: quem perde o celular depende do outro para zerar as duas etapas.
 
 Pelo terminal, um administrador pode gerar novo link rodando o mesmo comando (sem zerar as duas etapas).
 
@@ -56,6 +56,21 @@ Resultado esperado: 85 áreas no banco (rascunho, vitrine privada) e 43 prospec�
 Se os nomes de arquivos mudarem no Drive, a contagem pode variar: confira o relatório.
 
 ## 6. Carregar as bases territoriais
+
+**Atalho (recomendado):** `UFS="GO DF" sh scripts/atualizar-bases.sh` na pasta do projeto no servidor. Baixa dos serviços oficiais que estão no ar e carrega tudo:
+
+| Camada | Fonte usada pelo script |
+|---|---|
+| SIGEF | INCRA, cópia publicada pelo IBAMA (`pamgia.ibama.gov.br`), com imóveis aprovados até **abr/2022**. Quando o download oficial do INCRA voltar, o script troca pela base oficial atualizada. |
+| Assentamentos | INCRA, cópia publicada pelo IBAMA |
+| Embargos | IBAMA e ICMBio (sem nome nem CPF/CNPJ do autuado) |
+| Unidades de conservação | ICMBio (federais) e SFB (estaduais) |
+| Terras indígenas | FUNAI |
+| CAR (imóveis) | Consulta ao vivo no WFS do SICAR (`TERRITORY_CAR_WFS_URL` / `TERRITORY_CAR_LAYER` no `.env`), sem carga |
+
+Desde 01/11/2026 `certificacao.incra.gov.br` e `acervofundiario.incra.gov.br` não resolvem no DNS (falha do INCRA). Enquanto isso, SNCI e quilombolas ficam pendentes. Os temas do CAR (APP, reserva legal etc.) exigem download manual no SICAR, que pede captcha.
+
+Carga manual, arquivo por arquivo:
 
 Sem esta etapa, o mapa de prospecção fica sem parcelas e os painéis informam "ainda não carregada". Baixe os arquivos nos sites oficiais e copie para `carga/`:
 
@@ -105,6 +120,6 @@ Teste a restauração uma vez por mês. Guarde `.env` em cofre de senhas: sem `D
 - [ ] `/painel` sem login leva à tela de entrada
 - [ ] `/api/opportunities` sem login responde 401
 - [ ] O login não oferece seletor de usuários
-- [ ] Administrador só entra com o segundo fator
+- [ ] Com `REQUIRE_MFA=true`, administrador só entra com o segundo fator
 - [ ] O portal não mostra nenhuma área antes da aprovação
 - [ ] Certificado HTTPS válido e backup restaurado em teste
