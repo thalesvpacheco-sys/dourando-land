@@ -36,7 +36,8 @@ export function createApp() {
         'img-src': ["'self'", 'data:', 'blob:', ...extra, ...g],
         'connect-src': ["'self'", ...extra, ...g, ...(g.length ? ['data:', 'blob:'] : [])],
         'worker-src': ["'self'", 'blob:'],
-        'script-src': ["'self'", ...extra, ...g, ...(g.length ? ['blob:'] : [])],
+        // 'wasm-unsafe-eval': o 3D da Google compila WebAssembly; libera só isso (não libera eval de JavaScript)
+        'script-src': ["'self'", ...extra, ...g, ...(g.length ? ['blob:', "'wasm-unsafe-eval'"] : [])],
         ...(g.length ? { 'frame-src': ["'self'", 'https://*.google.com'] } : {}),
         'upgrade-insecure-requests': config.cookieSecure ? [] : null,
       },
