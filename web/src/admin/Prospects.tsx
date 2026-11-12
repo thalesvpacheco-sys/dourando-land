@@ -10,6 +10,7 @@ import { Empty, ErrorBox, Field, Loading, Modal, useAsync, useToast } from '../c
 import MapView from '../components/MapView';
 import DrawMap from '../components/DrawMap';
 import OverlapPanel from '../components/OverlapPanel';
+import EnvironmentPanel from '../components/EnvironmentPanel';
 import { EarthTools, Google3DView } from '../components/EarthTools';
 import { PageHeader } from './Shell';
 import { CreateProspect } from './TerritoryMap';
@@ -209,6 +210,7 @@ export function ProspectDetail() {
           </div>
 
           {p.geometry && <OverlapPanel url={`/api/prospects/${id}/overlap`} />}
+          {p.geometry && <EnvironmentPanel url={`/api/prospects/${id}/environment`} />}
 
           <div className="panel">
             <h2 style={{ marginBottom: '0.6rem' }}>Dados territoriais e registrais de origem</h2>

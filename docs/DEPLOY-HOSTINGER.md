@@ -4,7 +4,7 @@
 A pasta **`/site`** (versão estática: front React + backend **simulado no navegador** com dados fictícios).
 O `.htaccess` da raiz reescreve tudo para `/site`, força HTTPS e impede o acesso ao código-fonte (`server`, `web`, `shared`, `docs`, `.git`).
 
-> A API real (Node + PostgreSQL/**PostGIS**) **não roda em hospedagem compartilhada** (a Hostinger só oferece MySQL lá). Para a plataforma completa é preciso VPS (ver `MANUAL-DE-IMPLANTACAO.md`).
+> A API real (Node + PostgreSQL/**PostGIS**) **não roda em hospedagem compartilhada** (a Hostinger só oferece MySQL lá). Para a plataforma completa é preciso VPS (ver `PUBLICAR.md`).
 
 ## Passo a passo
 1. Atualize o site quando mudar o front: `npm run build:site` e faça commit da pasta `site/`.

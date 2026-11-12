@@ -15,6 +15,17 @@ import { formatArea } from '@dl/shared';
 const PROVIDER_STYLE = import.meta.env.VITE_MAP_STYLE_URL as string | undefined;
 const SATELLITE = import.meta.env.VITE_SATELLITE_TILES as string | undefined;
 
+export const HAS_SATELLITE = !!SATELLITE;
+/** Satélite como camada alternável, abaixo das parcelas (mapas que têm dados por cima). */
+export function addSatellite(m: MLMap) {
+  if (!SATELLITE || m.getSource('sat-toggle')) return;
+  m.addSource('sat-toggle', { type: 'raster', tiles: [SATELLITE], tileSize: 256, attribution: import.meta.env.VITE_SATELLITE_ATTRIBUTION as string | undefined ?? 'Imagem de satélite: provedor licenciado' });
+  m.addLayer({ id: 'sat-toggle', type: 'raster', source: 'sat-toggle' }, 'uf-line');
+}
+export function setSatelliteVisible(m: MLMap, on: boolean) {
+  if (m.getLayer('sat-toggle')) m.setLayoutProperty('sat-toggle', 'visibility', on ? 'visible' : 'none');
+}
+
 export const CITIES: [string, number, number][] = [
   ['Goianira', -49.426, -16.494], ['Senador Canedo', -49.092, -16.708], ['Trindade', -49.492, -16.649], ['Aparecida de Goiânia', -49.244, -16.823], ['Inhumas', -49.496, -16.358], ['Bela Vista de Goiás', -48.951, -16.973],
   ['Goiânia', -49.264, -16.686], ['Brasília', -47.882, -15.794], ['Anápolis', -48.952, -16.328], ['Palmas', -48.333, -10.184],

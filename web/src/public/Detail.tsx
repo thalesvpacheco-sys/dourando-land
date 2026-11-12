@@ -4,7 +4,8 @@ import {
   APPROVAL_STAGES, LAND_TYPES, earthUrl, MODALITIES, TECHNICAL_KEYS, VIABILITY, DOC_CATEGORIES, formatArea, formatBRL,
   type ApprovalStage, type LandType, type Modality, type TechnicalKey, type Viability, type DocCategory,
 } from '@dl/shared';
-import { api, ApiError, DEMO, FRAMED, getAttribution, getToken, openFile, track, NEW_TAB } from '../lib/api';
+import { useSession } from '../lib/session';
+import { api, ApiError, DEMO, FRAMED, getAttribution, openFile, track, NEW_TAB } from '../lib/api';
 import MapView, { type AreaFeature } from '../components/MapView';
 import { Empty, Field, Loading, Modal, ValidationBadge, useToast } from '../components/ui';
 import { statusLabel, type PublicArea } from './Ficha';
@@ -37,7 +38,7 @@ export default function Detail() {
   const [interest, setInterest] = useState<null | 'whatsapp' | 'form'>(null);
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [fav, setFav] = useState(false);
-  const logged = !!getToken();
+  const logged = !!useSession().me;
 
   useEffect(() => {
     setA(null);

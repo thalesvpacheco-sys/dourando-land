@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import {
-  CAPTURE_CHECKLIST, LAND_TYPES, PROSPECT_SOURCES, PROSPECT_STAGES, UFS, VIABILITY, earthUrl, prospectScore, scoreMatch, toKml, formatArea,
+  CAPTURE_CHECKLIST, PARCEL_LAYERS, TERRITORY_LAYER_KEYS, parseCoordinates, LAND_TYPES, PROSPECT_SOURCES, PROSPECT_STAGES, UFS, VIABILITY, earthUrl, prospectScore, scoreMatch, toKml, formatArea,
   type MatchProfile,
 } from '@dl/shared';
 import { db } from '../db/knex.js';
@@ -13,7 +13,7 @@ import { buildSlug, nextCode } from '../domain/opportunities.js';
 import { saveGeometry, polygonsOf, parseGeoFile } from '../geo/geo.js';
 import multer from 'multer';
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024 } });
-import { getFeatures, layerStatus, lookupPoint, overlapFor } from '../integrations/territory.js';
+import { environmentFor, featureById, getFeatures, layerStatus, loadedDatasets, lookupPoint, overlapFor, radarSearch, searchFeatures, toDxf } from '../integrations/territory.js';
 import { recomputeMatchesForOpportunity } from './matching.js';
 
 export const router = Router();
@@ -255,6 +255,20 @@ router.get('/:id/overlap', ah(async (req, res) => {
   res.json(await overlapFor({ table: 'land_prospects', id: p.id }, p.uf));
 }));
 
+router.get('/:id/environment', ah(async (req, res) => {
+  requireScope(req, 'territory', 'read');
+  const p = await getProspect(req, String(req.params.id));
+  res.json(await environmentFor({ table: 'land_prospects', id: p.id }));
+}));
+
+router.get('/:id/dxf', ah(async (req, res) => {
+  const p = await getProspect(req, String(req.params.id));
+  if (!p.geometry) throw badRequest('Sem perímetro cadastrado');
+  const dxf = await toDxf({ sql: 'SELECT geom FROM land_prospects WHERE id = ?', bindings: [p.id] }, p.code);
+  await audit(req, 'export.dxf', 'land_prospects', p.id);
+  res.type('application/dxf').attachment(`${p.code}.dxf`).send(dxf);
+}));
+
 router.get('/:id/kml', ah(async (req, res) => {
   const p = await getProspect(req, String(req.params.id));
   const kml = toKml({ name: `${p.code} — ${p.title}`, description: `Prospecção Dourado. ${p.city ?? ''}/${p.uf ?? ''} ${p.area_m2 ? formatArea(p.area_m2) : ''}`, geometry: p.geometry, point: p.lng != null ? [p.lng, p.lat] : undefined });
@@ -310,12 +324,12 @@ territoryRouter.use(authenticate);
 
 territoryRouter.get('/layers', ah(async (req, res) => {
   requireScope(req, 'territory', 'read');
-  res.json(layerStatus());
+  res.json(layerStatus(await loadedDatasets()));
 }));
 
 territoryRouter.get('/features', ah(async (req, res) => {
   requireScope(req, 'territory', 'read');
-  const q = parse(z.object({ layer: z.enum(['sigef', 'car']), bbox: z.string(), uf: z.string().length(2).optional() }), req.query);
+  const q = parse(z.object({ layer: z.enum(TERRITORY_LAYER_KEYS as [string, ...string[]]), bbox: z.string(), uf: z.string().length(2).optional() }), req.query);
   const b = q.bbox.split(',').map(Number);
   if (b.length !== 4 || !b.every(Number.isFinite)) throw badRequest('bbox inválido');
   try {
@@ -323,6 +337,80 @@ territoryRouter.get('/features', ah(async (req, res) => {
   } catch (e: any) {
     res.status(e.status ?? 502).json({ error: e.message });
   }
+}));
+
+// Busca única: coordenadas (decimal, GMS, UTM), códigos das bases oficiais e áreas já cadastradas
+territoryRouter.get('/search', ah(async (req, res) => {
+  requireScope(req, 'territory', 'read');
+  const q = parse(z.object({ q: z.string().min(2).max(120), uf: z.string().length(2).optional() }), req.query);
+  const point = parseCoordinates(q.q);
+  if (point) return void res.json({ point, features: [], internal: [] });
+  const features = await searchFeatures(q.q, q.uf ?? null);
+  const clean = q.q.trim().replace(/[%_\\]/g, '');
+  if (clean.length < 2) return void res.json({ point: null, features, internal: [] });
+  const like = `%${clean}%`;
+  const scope = requireScope(req, 'prospect', 'read');
+  const prospects = db('land_prospects').where({ org_id: req.user!.dataOrgId }).where((w) => w.whereILike('code', like).orWhereILike('title', like))
+    .select(db.raw(`'prospect' as kind`), 'id', 'code', 'title', 'city', 'uf', 'lat', 'lng').limit(10);
+  if (scope === 'own') prospects.andWhere((w) => w.where('created_by', req.user!.id).orWhere('referred_by_broker_id', req.user!.brokerId ?? NONE));
+  const items: any[] = await prospects;
+  if (can(req, 'exact_location', 'read')) {
+    items.push(...await db('land_opportunities').where({ org_id: req.user!.dataOrgId }).where((w) => w.whereILike('code', like).orWhereILike('internal_name', like))
+      .select(db.raw(`'opportunity' as kind`), 'id', 'code', 'internal_name as title', 'city', 'uf', 'lat', 'lng').limit(10));
+  }
+  res.json({ point: null, features, internal: items });
+}));
+
+territoryRouter.get('/radar', ah(async (req, res) => {
+  requireScope(req, 'prospect', 'create');
+  const q = parse(z.object({
+    uf: z.string().length(2).optional(), municipio: z.string().max(120).optional(), min_ha: z.coerce.number().min(0).optional(), max_ha: z.coerce.number().min(0).optional(),
+    layer: z.enum(PARCEL_LAYERS as [string, ...string[]]).default('sigef'), exclude_restrictions: z.enum(['0', '1']).default('1'), profile_id: z.string().uuid().optional(),
+  }), req.query);
+  const orgId = req.user!.dataOrgId;
+  let { uf, min_ha, max_ha } = q;
+  let municipios = q.municipio ? [q.municipio.trim()] : undefined;
+  if (q.profile_id) {
+    const ap = await db('acquisition_profiles').where({ id: q.profile_id, org_id: orgId }).first();
+    if (!ap) throw notFound('Perfil de aquisição');
+    uf ??= ap.ufs?.[0];
+    municipios ??= ap.cities?.length ? ap.cities : undefined;
+    min_ha ??= ap.min_area_m2 != null ? ap.min_area_m2 / 10000 : undefined;
+    max_ha ??= ap.max_area_m2 != null ? ap.max_area_m2 / 10000 : undefined;
+  }
+  if (!uf) throw badRequest('Informe a UF');
+  const r = await radarSearch({ uf, municipios, min_ha, max_ha, layer: q.layer, exclude_restrictions: q.exclude_restrictions === '1', orgId, limit: 100 });
+  // demanda: quantos perfis ativos combinam com cada candidata
+  const items = [];
+  for (const f of r.items) {
+    const p = f.properties;
+    const demand = await demandFor(orgId, { uf: p.uf, city: p.municipio, area_m2: p.area_ha != null ? p.area_ha * 10000 : null, asking_price_hint: null, intended_uses: [] });
+    const compatible = demand.filter((d: any) => !d.excluded && d.score >= 40);
+    items.push({ ...f, demand: compatible.slice(0, 3).map((d: any) => ({ profile: d.profile, partner: d.partner, score: d.score })), demand_count: compatible.length });
+  }
+  items.sort((a, b) => b.demand_count - a.demand_count || (b.properties.area_ha ?? 0) - (a.properties.area_ha ?? 0));
+  res.json({ ...r, filter: { uf, municipios, min_ha, max_ha, layer: q.layer }, items });
+}));
+
+territoryRouter.get('/features/:id/dxf', ah(async (req, res) => {
+  requireScope(req, 'territory', 'read');
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) throw notFound('Parcela');
+  const f = await featureById(id);
+  if (!f) throw notFound('Parcela');
+  const dxf = await toDxf({ sql: 'SELECT geom FROM territory_features WHERE id = ?', bindings: [id] }, `${f.layer}_${f.code ?? id}`);
+  await audit(req, 'export.dxf', 'territory_features', null, { id, layer: f.layer, code: f.code });
+  res.type('application/dxf').attachment(`${f.layer}-${String(f.code ?? id).slice(0, 40)}.dxf`).send(dxf);
+}));
+
+territoryRouter.get('/features/:id/kml', ah(async (req, res) => {
+  requireScope(req, 'territory', 'read');
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) throw notFound('Parcela');
+  const f = await featureById(id);
+  if (!f) throw notFound('Parcela');
+  await audit(req, 'export.kml', 'territory_features', null, { id, layer: f.layer, code: f.code });
+  res.type('application/vnd.google-earth.kml+xml').attachment(`${f.layer}-${String(f.code ?? id).slice(0, 40)}.kml`).send(toKml({ name: f.name ?? f.code ?? `Parcela ${id}`, description: `${f.layer.toUpperCase()} ${f.code ?? ''}`, geometry: f.geometry }));
 }));
 
 territoryRouter.get('/lookup', ah(async (req, res) => {

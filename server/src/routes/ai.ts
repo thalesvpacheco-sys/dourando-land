@@ -9,6 +9,10 @@ import { config } from '../config.js';
 import { authenticate, requireScope } from '../auth/auth.js';
 import { ah, parse } from '../lib/http.js';
 import { getScopedOpportunity, loadRelations, publicView } from '../domain/opportunities.js';
+import multer from 'multer';
+import { fileTypeFromBuffer } from 'file-type';
+import { HttpError } from '../lib/http.js';
+import { audit } from '../lib/audit.js';
 import { computeGaps, heuristicDescription, parseNaturalQuery } from '../domain/ai-heuristics.js';
 export { parseNaturalQuery };
 
@@ -42,6 +46,46 @@ async function save(orgId: string, kind: string, content: unknown, origin: strin
   const [row] = await db('ai_suggestions').insert({ org_id: orgId, kind, content: JSON.stringify(content), origin, requested_by: userId, ...refs }).returning('id');
   return row.id;
 }
+
+// ------------------------------------------------------------------ leitura de matrícula
+
+const pdfUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 32 * 1024 * 1024 } });
+const MATRICULA_PROMPT = `Você recebe a certidão de matrícula de um imóvel brasileiro (PDF, às vezes escaneado). Transcreva e resuma SEM inventar nada.
+Responda somente com JSON válido, sem texto em volta, neste formato:
+{"matricula":"número ou null","cartorio":"nome e comarca ou null","imovel":"descrição curta","area_declarada":"como consta ou null",
+"proprietarios_atuais":["nome, sem CPF/CNPJ"],"atos":[{"ato":"R.1 ou AV.2","data":"como consta ou null","tipo":"abertura|registro|averbacao","resumo":"uma frase"}],
+"onus_vigentes":["hipoteca, penhora, usufruto etc. ainda não cancelados"],"pontos_de_atencao":["trechos ilegíveis, dúvidas, divergências"],"transcricao":"texto integral transcrito"}
+Omita CPF, CNPJ e RG no resumo. Se um trecho estiver ilegível, escreva [ilegível]. Se o documento não for uma matrícula, responda {"erro":"motivo"}.`;
+
+/** Lê a matrícula por IA. O resultado é apoio à diligência: sempre conferir com a certidão original. O PDF não é guardado. */
+router.post('/matricula', pdfUpload.single('file'), ah(async (req, res) => {
+  requireScope(req, 'ai', 'create');
+  requireScope(req, 'document', 'read');
+  if (!config.anthropicKey) throw new HttpError(503, 'Leitura de matrícula indisponível: configure ANTHROPIC_API_KEY no servidor.');
+  const f = req.file;
+  if (!f) throw new HttpError(400, 'Envie o PDF da matrícula.');
+  if ((await fileTypeFromBuffer(f.buffer))?.mime !== 'application/pdf') throw new HttpError(400, 'O arquivo precisa ser um PDF.');
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': config.anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: config.anthropicModel, max_tokens: 8000,
+      messages: [{ role: 'user', content: [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.buffer.toString('base64') } },
+        { type: 'text', text: MATRICULA_PROMPT },
+      ] }],
+    }),
+    signal: AbortSignal.timeout(170000),
+  }).catch(() => null);
+  if (!r?.ok) throw new HttpError(502, 'O serviço de IA não respondeu. Tente de novo em alguns minutos.');
+  const j: any = await r.json();
+  const text: string = j.content?.map((c: any) => c.text ?? '').join('') ?? '';
+  let parsed: any;
+  try { parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { throw new HttpError(502, 'Não foi possível interpretar a resposta. Tente de novo.'); }
+  if (parsed.erro) throw new HttpError(422, String(parsed.erro));
+  await audit(req, 'ai.matricula', 'ai_suggestions', null, { matricula: parsed.matricula ?? null, modelo: config.anthropicModel });
+  res.json({ ...parsed, origin: `anthropic:${config.anthropicModel}`, aviso: 'Leitura por IA: pode conter erros. Confira sempre com a certidão original.' });
+}));
 
 // ------------------------------------------------------------------ descrição comercial
 

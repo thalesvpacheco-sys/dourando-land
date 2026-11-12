@@ -66,7 +66,7 @@ Menus: portal público em `/` e painel em `/painel`.
 - Reimportar não duplica: a importação atualiza só os campos que a equipe não editou e registra os conflitos.
 - Primeira prévia real (02/11/2026): 922 arquivos, 128 áreas (85 no banco, 43 no funil), 105 com perímetro. Foi testada num banco isolado e reaplicada sem duplicatas.
 - O relatório `_PREVIA_IMPORTACAO_DOURADO_LAND.xlsx` está na pasta do cliente.
-- O inventário real **nunca** vai para o artifact de demonstração.
+- O inventário real **nunca** vai para a demonstração.
 - Pendente:
   - definir o servidor de produção;
   - criar a conta de serviço do Google para a sincronização automática (driver Drive API);
@@ -77,13 +77,12 @@ Menus: portal público em `/` e painel em `/painel`.
 - Botão "Abrir no Google Earth" (link profundo com a câmera sobre a área) e exportação KML no estilo Dourado para importar em projetos do Earth.
 - Vista 3D fotorrealista integrada via Google 3D Maps (`Map3DElement` + `Polygon3DElement`): já implementada; depende de `VITE_GOOGLE_MAPS_API_KEY`, chave faturada pela Google.
 
-## Demonstração para testes (artifact)
-- Link: https://claude.ai/artifact/Md5pFwjBmLCKq54oKqojhS (compartilhado publicamente pelo dono).
+## Demonstração para testes
 - Usa a mesma interface com um backend simulado no navegador (`web/src/demo/mockServer.ts`). O simulador reaproveita a matriz de permissões, as visões, o matching, a mensagem do WhatsApp, as heurísticas, a pré-qualificação e as parcelas fictícias reais. A sobreposição é calculada com turf.
 - A barra de teste troca o perfil, simula o WhatsApp e segue um roteiro que inclui captação e Earth. Ela se recolhe sozinha no mapa de prospecção.
 - Os dados ficam só no navegador de quem testa.
 - Como gerar: `npm run seed && npm run export:demo -w server && npm run build:demo -w web` (saída em `web/dist-demo`; o export também copia `brand/`).
-- Limites do frame:
+- Limites da demonstração embutida em frame:
   - sem downloads (o CSV e o KML vão para a área de transferência);
   - sem impressão do book e sem abertura automática do WhatsApp;
   - sem vista 3D, porque scripts externos são bloqueados.

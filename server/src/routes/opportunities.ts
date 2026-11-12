@@ -12,7 +12,7 @@ import { newKey, processImage, sha256, signDocumentUrl, storage, validateDocumen
 import { buildSlug, getScopedOpportunity, internalView, loadRelations, nextCode, publicationChecklist, scopeOpportunities } from '../domain/opportunities.js';
 import { parseGeoFile, saveGeometry } from '../geo/geo.js';
 import { recomputeMatchesForOpportunity } from './matching.js';
-import { overlapFor } from '../integrations/territory.js';
+import { environmentFor, overlapFor, toDxf } from '../integrations/territory.js';
 import { toKml, formatArea } from '@dl/shared';
 
 export const router = Router();
@@ -244,6 +244,22 @@ router.get('/:id/kml', ah(async (req, res) => {
   const kml = toKml({ name: `${o.code} — ${o.public_title ?? o.internal_name}`, description: `Dourado Real Estate Partners. ${o.city}/${o.uf}, ${formatArea(o.area_m2)}.`, geometry: g?.geometry, point: o.lng != null ? [o.lng, o.lat] : undefined });
   await audit(req, 'export.kml', 'land_opportunities', o.id);
   res.type('application/vnd.google-earth.kml+xml').attachment(`${o.code}.kml`).send(kml);
+}));
+
+router.get('/:id/dxf', ah(async (req, res) => {
+  requireScope(req, 'exact_location', 'read');
+  const o = await getScopedOpportunity(req, String(req.params.id));
+  const dxf = await toDxf({ sql: 'SELECT geom FROM land_geometries WHERE opportunity_id = ? AND is_current', bindings: [o.id] }, o.code);
+  if (!dxf) throw badRequest('Sem perímetro cadastrado');
+  await audit(req, 'export.dxf', 'land_opportunities', o.id);
+  res.type('application/dxf').attachment(`${o.code}.dxf`).send(dxf);
+}));
+
+router.get('/:id/environment', ah(async (req, res) => {
+  requireScope(req, 'territory', 'read');
+  requireScope(req, 'exact_location', 'read');
+  const o = await getScopedOpportunity(req, String(req.params.id));
+  res.json(await environmentFor({ table: 'land_geometries', id: o.id }));
 }));
 
 router.get('/:id/overlap', ah(async (req, res) => {

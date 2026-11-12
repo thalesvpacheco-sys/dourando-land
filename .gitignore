@@ -4,10 +4,13 @@ node_modules/
 !.env.example
 !.env.demo
 !.env.static
+!.env.producao.exemplo
 server/storage/
 storage/
 web/dist/
 web/dist-demo/
+carga/
+*.zip
 *.log
 .DS_Store
 Thumbs.db

@@ -2,7 +2,7 @@
   "name": "dourado-land-intelligence",
   "private": true,
   "workspaces": ["shared", "server", "web"],
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=20.12" },
   "scripts": {
     "dev": "concurrently -n api,web -c yellow,cyan \"npm run dev -w server\" \"npm run dev -w web\"",
     "migrate": "npm run migrate -w server",

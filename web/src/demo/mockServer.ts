@@ -1,5 +1,5 @@
 /**
- * Backend SIMULADO no navegador, usado apenas na demonstração publicada como artifact.
+ * Backend SIMULADO no navegador, usado apenas nas demonstrações (build demo e site estático).
  *
  * Reaproveita as mesmas regras do servidor real (matriz de permissões, visões pública/interna, checklist de publicação,
  * matching, mensagem do WhatsApp e heurísticas de IA). Não há banco: o estado vive na memória da página e, quando o

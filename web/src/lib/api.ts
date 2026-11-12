@@ -1,12 +1,13 @@
-/** Build de demonstração (artifact): backend simulado no navegador. */
+/** Build de demonstração: backend simulado no navegador. */
 export const DEMO = import.meta.env.VITE_DEMO === '1';
 /** Site estático publicado (URLs reais, sem frame): mesmo backend simulado, mas roteamento por URL e novas abas liberadas. */
 export const STATIC_SITE = DEMO && import.meta.env.VITE_ROUTER === 'browser';
-/** Em demonstração dentro de frame (artifact), links não abrem nova aba. */
+/** Em demonstração dentro de frame (iframe), links não abrem nova aba. */
 export const FRAMED = DEMO && !STATIC_SITE;
 export const NEW_TAB: '_blank' | undefined = FRAMED ? undefined : '_blank';
 
-// Cliente HTTP do painel e do portal. O token vem da identidade WingsBr (ou do login de demonstração).
+// Cliente HTTP do painel e do portal. Em produção a sessão fica em cookie HttpOnly (o script não enxerga o token);
+// o token em localStorage existe só na demonstração e no seletor de desenvolvimento.
 
 const TOKEN_KEY = 'dl.token';
 
@@ -15,6 +16,17 @@ export function getToken(): string | null {
 }
 export function setToken(t: string | null) {
   try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch { /* armazenamento indisponível */ }
+}
+
+/** Baixa um arquivo autenticado e salva com o nome informado. */
+export async function downloadFile(url: string, filename: string) {
+  const t = getToken();
+  const r = await fetch(url, t ? { headers: { Authorization: `Bearer ${t}` } } : undefined);
+  if (!r.ok) throw new Error(r.status === 403 ? 'Sem permissão para exportar' : 'Não foi possível gerar o arquivo');
+  const href = URL.createObjectURL(await r.blob());
+  const a = document.createElement('a');
+  a.href = href; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(href), 10000);
 }
 
 export class ApiError extends Error {

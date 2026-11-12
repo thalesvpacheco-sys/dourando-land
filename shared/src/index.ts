@@ -410,7 +410,7 @@ export function pointInGeometry(pt: [number, number], g: any): boolean {
 
 /** Propriedades normalizadas de uma parcela, qualquer que seja a fonte (SIGEF/INCRA, SICAR/CAR). */
 export interface TerritoryProps {
-  layer: 'sigef' | 'car';
+  layer: string;
   codigo: string;
   nome: string | null;
   area_ha: number | null;
@@ -422,6 +422,83 @@ export interface TerritoryProps {
   data_referencia: string | null;
   fonte: string;
   ficticio?: boolean;
+}
+
+/**
+ * Camadas territoriais. As parcelas identificam o imóvel; as ambientais entram no cálculo da área aproveitável;
+ * as restrições são alertas de diligência. `deducts`: desconta da área aproveitável estimada.
+ */
+export const TERRITORY_LAYERS = {
+  sigef: { label: 'Imóveis certificados (SIGEF/INCRA)', short: 'SIGEF', group: 'parcel', color: '#d6202f', source: 'INCRA — Acervo Fundiário', official: 'https://acervofundiario.incra.gov.br/acervo/acv.php' },
+  snci: { label: 'Certificações antigas (SNCI/INCRA)', short: 'SNCI', group: 'parcel', color: '#1f3fd1', source: 'INCRA — Acervo Fundiário', official: 'https://acervofundiario.incra.gov.br/acervo/acv.php' },
+  car: { label: 'Cadastro Ambiental Rural (CAR)', short: 'CAR', group: 'parcel', color: '#1fa83c', source: 'SICAR — Consulta pública', official: 'https://consultapublica.car.gov.br/publico/estados/downloads' },
+  car_app: { label: 'Área de preservação permanente (APP)', short: 'APP', group: 'environment', color: '#35a7e0', deducts: true, source: 'SICAR — Consulta pública', official: 'https://consultapublica.car.gov.br/publico/estados/downloads' },
+  car_rl: { label: 'Reserva Legal', short: 'Reserva Legal', group: 'environment', color: '#e6c532', deducts: true, source: 'SICAR — Consulta pública', official: 'https://consultapublica.car.gov.br/publico/estados/downloads' },
+  car_hidro: { label: 'Hidrografia', short: 'Hidrografia', group: 'environment', color: '#1c4fb8', deducts: true, source: 'SICAR — Consulta pública', official: 'https://consultapublica.car.gov.br/publico/estados/downloads' },
+  car_uso_restrito: { label: 'Uso restrito', short: 'Uso restrito', group: 'environment', color: '#b06ad6', deducts: true, source: 'SICAR — Consulta pública', official: 'https://consultapublica.car.gov.br/publico/estados/downloads' },
+  car_vegetacao: { label: 'Vegetação nativa', short: 'Vegetação', group: 'environment', color: '#2f8f4e', source: 'SICAR — Consulta pública', official: 'https://consultapublica.car.gov.br/publico/estados/downloads' },
+  car_consolidada: { label: 'Área consolidada', short: 'Consolidada', group: 'environment', color: '#d9a066', source: 'SICAR — Consulta pública', official: 'https://consultapublica.car.gov.br/publico/estados/downloads' },
+  terra_indigena: { label: 'Terra indígena', short: 'Terra indígena', group: 'restriction', color: '#7d3fd1', source: 'FUNAI', official: 'https://www.gov.br/funai/pt-br/atuacao/terras-indigenas/geoprocessamento-e-mapas' },
+  uc: { label: 'Unidade de conservação', short: 'UC', group: 'restriction', color: '#0f7f77', source: 'MMA/ICMBio', official: 'https://www.gov.br/mma/pt-br/assuntos/biodiversidade-e-biomas/areas-protegidas' },
+  quilombola: { label: 'Território quilombola', short: 'Quilombola', group: 'restriction', color: '#c48a12', source: 'INCRA — Acervo Fundiário', official: 'https://acervofundiario.incra.gov.br/acervo/acv.php' },
+  assentamento: { label: 'Assentamento', short: 'Assentamento', group: 'restriction', color: '#b5a100', source: 'INCRA — Acervo Fundiário', official: 'https://acervofundiario.incra.gov.br/acervo/acv.php' },
+  embargo: { label: 'Área embargada', short: 'Embargo', group: 'restriction', color: '#e0311f', source: 'IBAMA', official: 'https://www.gov.br/ibama/pt-br/assuntos/fiscalizacao-e-protecao-ambiental/fiscalizacao/areas-embargadas' },
+  desmatamento: { label: 'Alerta de desmatamento', short: 'Desmatamento', group: 'restriction', color: '#a82a4a', source: 'MapBiomas Alerta', official: 'https://alerta.mapbiomas.org/' },
+} as const;
+export type TerritoryLayer = keyof typeof TERRITORY_LAYERS;
+export const TERRITORY_LAYER_KEYS = Object.keys(TERRITORY_LAYERS) as TerritoryLayer[];
+export const PARCEL_LAYERS = TERRITORY_LAYER_KEYS.filter((k) => TERRITORY_LAYERS[k].group === 'parcel');
+export const ENVIRONMENT_LAYERS = TERRITORY_LAYER_KEYS.filter((k) => TERRITORY_LAYERS[k].group === 'environment');
+export const RESTRICTION_LAYERS = TERRITORY_LAYER_KEYS.filter((k) => TERRITORY_LAYERS[k].group === 'restriction');
+export const DEDUCTING_LAYERS = TERRITORY_LAYER_KEYS.filter((k) => (TERRITORY_LAYERS[k] as { deducts?: boolean }).deducts);
+
+/** UTM (SIRGAS 2000) para latitude/longitude. Hemisfério sul por padrão, como em todo o território relevante. */
+export function utmToLatLng(zone: number, easting: number, northing: number, south = true): [number, number] {
+  const a = 6378137, f = 1 / 298.257222101, k0 = 0.9996;
+  const e2 = f * (2 - f), ep2 = e2 / (1 - e2), x = easting - 500000, y = south ? northing - 10000000 : northing;
+  const mu = y / k0 / (a * (1 - e2 / 4 - (3 * e2 ** 2) / 64 - (5 * e2 ** 3) / 256));
+  const e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+  const p1 = mu + ((3 * e1) / 2 - (27 * e1 ** 3) / 32) * Math.sin(2 * mu) + ((21 * e1 ** 2) / 16 - (55 * e1 ** 4) / 32) * Math.sin(4 * mu)
+    + ((151 * e1 ** 3) / 96) * Math.sin(6 * mu) + ((1097 * e1 ** 4) / 512) * Math.sin(8 * mu);
+  const s = Math.sin(p1), c = Math.cos(p1), t = Math.tan(p1);
+  const C = ep2 * c * c, T = t * t, N = a / Math.sqrt(1 - e2 * s * s), R = (a * (1 - e2)) / (1 - e2 * s * s) ** 1.5, D = x / (N * k0);
+  const lat = p1 - ((N * t) / R) * (D ** 2 / 2 - ((5 + 3 * T + 10 * C - 4 * C * C - 9 * ep2) * D ** 4) / 24
+    + ((61 + 90 * T + 298 * C + 45 * T * T - 252 * ep2 - 3 * C * C) * D ** 6) / 720);
+  const lng = (D - ((1 + 2 * T + C) * D ** 3) / 6 + ((5 - 2 * C + 28 * T - 3 * C * C + 8 * ep2 + 24 * T * T) * D ** 5) / 120) / c;
+  return [(lat * 180) / Math.PI, (zone - 1) * 6 - 180 + 3 + (lng * 180) / Math.PI];
+}
+
+const inBrazil = (lat: number, lng: number) => lat >= -35 && lat <= 7 && lng >= -75 && lng <= -28;
+
+/** Lê coordenadas em decimal, graus-minutos-segundos ou UTM. Retorna null se o texto não for uma coordenada. */
+export function parseCoordinates(input: string): { lat: number; lng: number; format: 'decimal' | 'gms' | 'utm' } | null {
+  const t = input.trim().toUpperCase().replace(/[′’]/g, "'").replace(/[″”]/g, '"');
+  const gmsRe = /(\d{1,3})\s*[°º]\s*(\d{1,2})\s*'\s*(\d{1,2}(?:[.,]\d+)?)?\s*"?\s*([NSWLOE])/g;
+  const parts = [...t.matchAll(gmsRe)];
+  if (parts.length === 2) {
+    let lat: number | null = null, lng: number | null = null;
+    for (const m of parts) {
+      const v = Number(m[1]) + Number(m[2]) / 60 + Number((m[3] ?? '0').replace(',', '.')) / 3600;
+      if (m[4] === 'N') lat = v; else if (m[4] === 'S') lat = -v; else if (m[4] === 'E' || m[4] === 'L') lng = v; else lng = -v;
+    }
+    return lat != null && lng != null && inBrazil(lat, lng) ? { lat, lng, format: 'gms' } : null;
+  }
+  const utm = t.match(/^(\d{2})\s*([C-X])?\s+([\d.,]+)\s*E?\s+([\d.,]+)\s*N?$/);
+  const num = (s: string) => {
+    // aceita 241.492 e 7.394.210 (separador de milhar) ou 241492,5 (decimal)
+    const c = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : (s.match(/\./g)?.length ?? 0) >= 1 && /\.\d{3}$/.test(s) ? s.replace(/\./g, '') : s;
+    return Number(c);
+  };
+  if (utm) {
+    const [lat, lng] = utmToLatLng(Number(utm[1]), num(utm[3]), num(utm[4]));
+    return inBrazil(lat, lng) ? { lat, lng, format: 'utm' } : null;
+  }
+  const dec = t.match(/^(-?\d{1,3}(?:[.,]\d+)?)\s*[,; ]\s*(-?\d{1,3}(?:[.,]\d+)?)$/);
+  if (dec) {
+    const lat = Number(dec[1].replace(',', '.')), lng = Number(dec[2].replace(',', '.'));
+    return inBrazil(lat, lng) ? { lat, lng, format: 'decimal' } : null;
+  }
+  return null;
 }
 
 function hash32(s: string) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }

@@ -38,7 +38,8 @@ export default function Areas({ approvals }: { approvals?: boolean }) {
   };
 
   const exportCsv = async () => {
-    const r = await fetch('/api/opportunities/export.csv', { headers: { Authorization: `Bearer ${getToken()}` } });
+    const t = getToken();
+    const r = await fetch('/api/opportunities/export.csv', t ? { headers: { Authorization: `Bearer ${t}` } } : undefined);
     if (!r.ok) { toast('Sem permissão para exportar', true); return; }
     if (DEMO) { try { await navigator.clipboard.writeText(await r.text()); toast('Na demonstração o download é bloqueado: o CSV foi copiado para a área de transferência'); } catch { toast('Exportação registrada na auditoria; download indisponível na demonstração'); } return; }
     const url = URL.createObjectURL(await r.blob());

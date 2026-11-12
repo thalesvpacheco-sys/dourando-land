@@ -4,7 +4,7 @@ import type { Map as MLMap } from 'maplibre-gl';
 import turfArea from '@turf/area';
 import turfLength from '@turf/length';
 import { formatArea } from '@dl/shared';
-import { baseStyle } from './MapView';
+import { addSatellite, baseStyle } from './MapView';
 import { api } from '../lib/api';
 
 type Ring = [number, number][];
@@ -29,6 +29,7 @@ export default function DrawMap({ importUrl, initial, center, onSave, saving }: 
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     m.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     m.on('load', () => {
+      addSatellite(m); // no desenho do perímetro, ver o terreno importa mais que o mapa de contornos
       m.addSource('draft', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
       m.addLayer({ id: 'draft-fill', type: 'fill', source: 'draft', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#f8b817', 'fill-opacity': 0.28 } });
       m.addLayer({ id: 'draft-line', type: 'line', source: 'draft', paint: { 'line-color': '#0a0a0a', 'line-width': 2.2 } });

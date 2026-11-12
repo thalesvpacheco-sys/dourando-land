@@ -1,0 +1,44 @@
+# Sobe tudo em um servidor: banco com PostGIS, aplicação e HTTPS automático.
+# Uso: copie .env.producao.exemplo para .env, preencha e rode `docker compose up -d --build`.
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dourado
+      POSTGRES_USER: dourado
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env}
+    volumes: [db:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dourado -d dourado"]
+      interval: 10s
+      retries: 10
+  app:
+    build:
+      context: .
+      args:
+        VITE_MAP_STYLE_URL: ${VITE_MAP_STYLE_URL:-}
+        VITE_SATELLITE_TILES: ${VITE_SATELLITE_TILES:-}
+        VITE_SATELLITE_ATTRIBUTION: ${VITE_SATELLITE_ATTRIBUTION:-}
+        VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://dourado:${DB_PASSWORD}@db:5432/dourado
+      PUBLIC_WEB_URL: https://${DOMINIO:?defina DOMINIO no .env}
+    volumes:
+      - storage:/data/storage
+      - ./carga:/carga:ro
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [app]
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMINIO: ${DOMINIO}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+volumes: { db: {}, storage: {}, caddy: {} }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { earthUrl, toKml } from '@dl/shared';
-import { DEMO, getToken } from '../lib/api';
+import { DEMO, downloadFile, getToken } from '../lib/api';
 import { useToast } from './ui';
 
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
@@ -18,7 +18,8 @@ export function EarthTools({ lat, lng, areaM2, name, geometry, kmlUrl }: { lat: 
     try {
       let kml: string;
       if (kmlUrl && !DEMO) {
-        const r = await fetch(kmlUrl, { headers: { Authorization: `Bearer ${getToken()}` } });
+        const t = getToken();
+        const r = await fetch(kmlUrl, t ? { headers: { Authorization: `Bearer ${t}` } } : undefined);
         if (!r.ok) throw new Error('Sem permissão para exportar o perímetro');
         kml = await r.text();
       } else kml = toKml({ name, geometry, point: [lng, lat] });
@@ -36,6 +37,7 @@ export function EarthTools({ lat, lng, areaM2, name, geometry, kmlUrl }: { lat: 
     <div className="row">
       <a className="btn ghost small" href={earthUrl(lat, lng, dist)} target="_blank" rel="noopener noreferrer">Abrir no Google Earth</a>
       <button type="button" className="btn ghost small" onClick={exportKml}>Exportar KML para o Earth</button>
+      {kmlUrl && !DEMO && <button type="button" className="btn ghost small" title="Polilinha fechada em UTM SIRGAS 2000, para CAD" onClick={() => void downloadFile(kmlUrl.replace(/\/kml$/, '/dxf'), `${name.split(' ')[0]}.dxf`).catch((e) => toast(e.message, true))}>Exportar DXF</button>}
     </div>
   );
 }

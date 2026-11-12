@@ -123,3 +123,32 @@ Bloqueio otimista: `PATCH /opportunities/:id` e `PATCH /negotiations/:id` exigem
 | `activity.log` | Atividade registrada | activity_id, crm_deal_id, crm_contact_id, type, subject |
 
 Resposta esperada (opcional): `{ contact_id }`, `{ lead_id }`, `{ deal_id }`, `{ activity_id }` — os IDs são gravados no módulo.
+
+
+## Login e usuários (login próprio)
+
+| Rota | Uso |
+|---|---|
+| `GET /api/auth/session` | Sessão atual (`authenticated`, usuário, permissões) |
+| `POST /api/auth/login` | E-mail e senha. Responde `step`: `done`, `mfa` ou `mfa_setup` (com `challenge`) |
+| `POST /api/auth/mfa/verify` | Desafio + código TOTP ou de recuperação |
+| `POST /api/auth/mfa/setup`, `/mfa/activate`, `/mfa/disable` | Configurar, ativar e desativar as duas etapas |
+| `POST /api/auth/link/check`, `/password/set` | Validar convite/redefinição e definir a senha |
+| `POST /api/auth/password/forgot`, `/password/change`, `/logout` | Esqueci a senha, trocar senha, sair |
+| `POST /api/admin/users`, `PATCH /api/admin/users/:id` | Convidar; alterar nome, perfil e situação |
+| `POST /api/admin/users/:id/link`, `/reset-mfa` | Novo link; zerar as duas etapas |
+
+A sessão fica no cookie `dl_session` (HttpOnly, SameSite=Strict, Secure em produção).
+
+## Território
+
+| Rota | Uso |
+|---|---|
+| `GET /api/territory/layers` | Camadas, situação, UFs carregadas e data |
+| `GET /api/territory/features?layer&bbox&uf` | Parcelas no recorte |
+| `GET /api/territory/search?q&uf` | Coordenadas, códigos, matrícula, nome e áreas internas |
+| `GET /api/territory/radar?uf&municipio&min_ha&max_ha&layer&exclude_restrictions&profile_id` | Candidatas à captação |
+| `GET /api/territory/features/:id/kml`, `/dxf` | Perímetro da parcela |
+| `GET /api/opportunities/:id/environment`, `/api/prospects/:id/environment` | Análise ambiental e restrições |
+| `GET /api/opportunities/:id/dxf`, `/api/prospects/:id/dxf` | Perímetro em DXF (UTM SIRGAS 2000) |
+| `POST /api/ai/matricula` | Leitura de matrícula (PDF) |

@@ -15,6 +15,7 @@ import Book from './public/Book';
 import { About, Builders, Contact, HowItWorks, Owners, Partners, Privacy } from './public/Pages';
 const Shell = lazy(() => import('./admin/Shell'));
 const Login = lazy(() => import('./admin/Login'));
+const SetPassword = lazy(() => import('./admin/Login').then((m) => ({ default: m.SetPassword })));
 const Dashboard = lazy(() => import('./admin/Dashboard'));
 const Areas = lazy(() => import('./admin/Areas'));
 const AreaEditor = lazy(() => import('./admin/AreaEditor'));
@@ -31,6 +32,8 @@ const Integrations = lazy(() => adm().then((m) => ({ default: m.Integrations }))
 const OwnerHome = lazy(() => adm().then((m) => ({ default: m.OwnerHome })));
 const Routing = lazy(() => adm().then((m) => ({ default: m.Routing })));
 const Users = lazy(() => adm().then((m) => ({ default: m.Users })));
+const Account = lazy(() => adm().then((m) => ({ default: m.Account })));
+const MatriculaTool = lazy(() => adm().then((m) => ({ default: m.MatriculaTool })));
 
 /** Links HTML puros (ex.: popups do mapa) navegam pelo roteador em vez de recarregar a página. */
 function LinkInterceptor() {
@@ -50,7 +53,9 @@ function LinkInterceptor() {
   return null;
 }
 
-const SHOW_DEMO_BAR = DEMO && import.meta.env.VITE_DEMO_BAR !== '0';
+// A condição direta em import.meta.env faz o build de produção descartar a barra e o servidor simulado.
+// VITE_DEMO_BAR=0 esconde a barra de testes no site estático publicado.
+const SHOW_DEMO_BAR = import.meta.env.VITE_DEMO === '1' && import.meta.env.VITE_DEMO_BAR !== '0';
 const DemoBar = SHOW_DEMO_BAR ? lazy(() => import('./demo/DemoBar')) : () => null;
 const Router = ({ children }: { children: ReactNode }) => (FRAMED ? <MemoryRouter>{children}</MemoryRouter> : <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>{children}</BrowserRouter>);
 
@@ -65,7 +70,7 @@ function PanelHome() {
 }
 
 async function boot() {
-  if (DEMO) (await import('./demo/mockServer')).installMockServer();
+  if (import.meta.env.VITE_DEMO === '1') (await import('./demo/mockServer')).installMockServer();
   createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Router>
@@ -88,6 +93,7 @@ async function boot() {
             </Route>
             <Route path="areas/:slug/book" element={<Book />} />
             <Route path="painel/entrar" element={<Login />} />
+            <Route path="painel/definir-senha" element={<SetPassword />} />
             <Route path="painel" element={<Shell />}>
               <Route index element={<PanelHome />} />
               <Route path="areas" element={<Areas />} />
@@ -103,6 +109,8 @@ async function boot() {
               <Route path="usuarios" element={<Users />} />
               <Route path="auditoria" element={<Audit />} />
               <Route path="integracoes" element={<Integrations />} />
+              <Route path="conta" element={<Account />} />
+              <Route path="matricula" element={<MatriculaTool />} />
             </Route>
             <Route path="*" element={<PublicLayout />}>
               <Route path="*" element={<div className="page"><h1 className="page-title">Página não encontrada</h1><a className="btn" href="/areas">Ver o banco de áreas</a></div>} />

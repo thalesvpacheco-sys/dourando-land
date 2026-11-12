@@ -186,7 +186,8 @@ export async function applyPlan(knex: Knex, plan: Plan, src: InventorySource, o:
           const cur = await trx('land_opportunities').where({ id: entityId }).first();
           const terms = await trx('land_commercial_terms').where({ opportunity_id: entityId }).first();
           const oppUpd: any = {}; const termsUpd: any = {};
-          const same = (a: any, b: any) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null) || (a != null && b != null && Number(a) === Number(b));
+          // números com tolerância: lat/lng vindos do PostGIS variam na 8ª casa decimal e não são edição da equipe
+          const same = (a: any, b: any) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null) || (a != null && b != null && Math.abs(Number(a) - Number(b)) < 1e-5);
           for (const [k, v] of Object.entries(f.opp)) {
             if (same(cur[k], v)) continue;
             if (same(cur[k], prev.opp?.[k])) oppUpd[k] = v; else r.conflicts.push(`${k}: plataforma "${cur[k]}" ≠ inventário "${v}" (editado pela equipe, mantido)`);

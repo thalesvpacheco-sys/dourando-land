@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatArea } from '@dl/shared';
+import { formatArea, TERRITORY_LAYERS, type TerritoryLayer } from '@dl/shared';
 import { api } from '../lib/api';
 
 /** Sobreposição do perímetro com parcelas certificadas (SIGEF/INCRA) e imóveis do CAR — apoio à diligência, não substitui certidões. */
@@ -28,7 +28,7 @@ export default function OverlapPanel({ url }: { url: string }) {
               <thead><tr><th>Base</th><th>Código</th><th>Imóvel</th><th className="r">Sobreposição</th><th className="r">% da área</th><th className="r">% da parcela</th><th>Situação</th></tr></thead>
               <tbody>{data.items.map((i: any, k: number) => (
                 <tr key={k}>
-                  <td>{i.layer === 'sigef' ? 'SIGEF' : 'CAR'}</td>
+                  <td>{TERRITORY_LAYERS[i.layer as TerritoryLayer]?.short ?? i.layer}</td>
                   <td className="small" style={{ wordBreak: 'break-all', maxWidth: 220 }}>{i.properties.codigo}</td>
                   <td className="small">{i.properties.nome ?? '—'}{i.properties.matricula && <div className="muted">Matrícula {i.properties.matricula}</div>}</td>
                   <td className="r num">{formatArea(i.intersection_m2)}</td>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { ROLES, type Role } from '@dl/shared';
 import { useSession } from '../lib/session';
-import { api, NEW_TAB } from '../lib/api';
+import { api, DEMO, NEW_TAB } from '../lib/api';
 import { Brand, Loading } from '../components/ui';
 
 export default function Shell() {
@@ -46,6 +46,7 @@ export default function Shell() {
             <p>Captação</p>
             {item('/painel/captacao/mapa', 'Prospecção no mapa')}
             {item('/painel/captacao', role === 'broker' ? 'Minhas indicações' : 'Funil de captação')}
+            {!DEMO && can('ai', 'create') && can('document', 'read') && item('/painel/matricula', 'Leitura de matrícula')}
           </>}
           {(can('interest', 'read') || can('negotiation', 'read')) && <p>Comercial</p>}
           {can('interest', 'read') && item('/painel/interesses', 'Interesses', counts.overdue)}
@@ -64,7 +65,10 @@ export default function Shell() {
           <b>{me.user.name}</b>
           <span>{ROLES[role]}</span>
           <div className="small" style={{ color: '#93a19f' }}>{me.org.name}</div>
-          <button className="btn link small" style={{ color: '#d6dcd8', marginTop: '0.5rem' }} onClick={logout}>Sair</button>
+          <div className="row" style={{ marginTop: '0.5rem' }}>
+            {!DEMO && <Link className="btn link small" style={{ color: '#d6dcd8' }} to="/painel/conta">Minha conta</Link>}
+            <button className="btn link small" style={{ color: '#d6dcd8' }} onClick={logout}>Sair</button>
+          </div>
           <div className="wb" style={{ marginTop: '0.8rem' }}>Tecnologia WingsBr</div>
         </div>
       </aside>

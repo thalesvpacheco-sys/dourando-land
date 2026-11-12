@@ -57,4 +57,4 @@ Há também o formato `--package <dir>`: `manifest.json` (caminho, tamanho, data
 
 ## Primeira prévia real (02/11/2026)
 
-A primeira prévia leu 922 arquivos em 119 pastas, que resultaram em 128 áreas: 85 vão para o banco e 43 para o funil, e 105 têm perímetro. Ela foi aplicada num banco isolado (`dourado_import`) e reaplicada sem gerar duplicatas. O relatório de revisão é a planilha `_PREVIA_IMPORTACAO_DOURADO_LAND.xlsx`, entregue ao cliente. **O inventário real nunca vai para o artifact de demonstração** (`export:demo` usa só o banco `dourado`, que tem apenas o seed fictício).
+A primeira prévia leu 922 arquivos em 119 pastas, que resultaram em 128 áreas: 85 vão para o banco e 43 para o funil, e 105 têm perímetro. Ela foi aplicada num banco isolado (`dourado_import`) e reaplicada sem gerar duplicatas. O relatório de revisão é a planilha `_PREVIA_IMPORTACAO_DOURADO_LAND.xlsx`, entregue ao cliente. **O inventário real nunca vai para a demonstração** (`export:demo` usa só o banco `dourado`, que tem apenas o seed fictício).

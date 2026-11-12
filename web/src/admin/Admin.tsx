@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { LAND_TYPES, ROLES, UFS, formatArea, type Role } from '@dl/shared';
-import { api } from '../lib/api';
+import { api, DEMO } from '../lib/api';
+import { MfaSetup, RecoveryCodes } from './Login';
 import { useSession } from '../lib/session';
 import { Empty, Field, Loading, Modal, useAsync, useToast } from '../components/ui';
 import { PageHeader } from './Shell';
@@ -108,16 +109,208 @@ function BrokerModal({ b, onClose, onSaved }: { b: any; onClose: () => void; onS
 
 // ------------------------------------------------------------------ usuários, auditoria, integrações
 
+const MFA_ROLES = ['platform_admin', 'dourado_admin', 'capture_manager'];
+const STAFF_ROLES = ['dourado_admin', 'capture_manager', 'broker'];
+
+function userStatus(u: any): [string, string] {
+  if (!u.active) return ['', 'Desativado'];
+  if (!u.has_password && !DEMO) return ['warn', 'Convite pendente'];
+  if (u.locked_until && new Date(u.locked_until) > new Date()) return ['bad', 'Bloqueado'];
+  return ['ok', 'Ativo'];
+}
+
+/** Link único: aparece uma vez para o administrador copiar e enviar. */
+function LinkModal({ link, onClose }: { link: { title: string; url: string; expires_at: string; email_sent: boolean }; onClose: () => void }) {
+  const toast = useToast();
+  return (
+    <Modal title={link.title} onClose={onClose}>
+      <div className="stack">
+        <p className={link.email_sent ? 'notice ok' : 'notice'} style={{ margin: 0 }}>{link.email_sent ? 'Enviamos o link por e-mail. Se preferir, copie abaixo.' : 'O envio por e-mail não está configurado. Copie o link e envie à pessoa por um canal seguro.'}</p>
+        <input className="input" readOnly value={link.url} aria-label="Link de acesso" onFocus={(e) => e.target.select()} />
+        <p className="small muted" style={{ margin: 0 }}>Uso único, válido até {new Date(link.expires_at).toLocaleString('pt-BR')}. Este link não será mostrado de novo.</p>
+        <div className="row">
+          <button className="btn gold" onClick={() => void navigator.clipboard.writeText(link.url).then(() => toast('Link copiado'))}>Copiar link</button>
+          <button className="btn ghost" onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function InviteModal({ roles, onClose, onDone }: { roles: string[]; onClose: () => void; onDone: (r: any) => void }) {
+  const [f, setF] = useState({ name: '', email: '', phone: '', role: 'broker', partner_company_id: '', opportunity_code: '' });
+  const [partners, setPartners] = useState<any[]>([]);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api('/api/partners').then((r) => setPartners(r.items ?? [])).catch(() => {}); }, []);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault(); setBusy(true); setErr('');
+    try {
+      onDone(await api('/api/admin/users', { body: { name: f.name, email: f.email, phone: f.phone || null, role: f.role, partner_company_id: f.role === 'buyer' ? f.partner_company_id || undefined : undefined, opportunity_code: f.role === 'owner' ? f.opportunity_code : undefined } }));
+    } catch (x: any) { setErr(x.message); setBusy(false); }
+  };
+  return (
+    <Modal title="Convidar usuário" onClose={onClose}>
+      <form className="stack" onSubmit={submit}>
+        <Field label="Nome"><input required minLength={2} autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        <Field label="E-mail"><input type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
+        <Field label="Perfil"><select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>{roles.map((r) => <option key={r} value={r}>{ROLES[r as Role]}</option>)}</select></Field>
+        {f.role === 'broker' && <Field label="WhatsApp (DDD + número)"><input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>}
+        {f.role === 'buyer' && <Field label="Empresa parceira"><select required value={f.partner_company_id} onChange={(e) => setF({ ...f, partner_company_id: e.target.value })}><option value="">Selecione</option>{partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>}
+        {f.role === 'owner' && <Field label="Código da área" hint="O proprietário verá só esta área e poderá enviar documentos."><input required placeholder="DOU-GO-0001" value={f.opportunity_code} onChange={(e) => setF({ ...f, opportunity_code: e.target.value })} /></Field>}
+        {MFA_ROLES.includes(f.role) && <p className="small muted" style={{ margin: 0 }}>Este perfil precisa ativar a verificação em duas etapas no primeiro acesso.</p>}
+        {err && <p className="error-text">{err}</p>}
+        <div className="row"><button className="btn gold" disabled={busy}>{busy ? 'Criando…' : 'Criar convite'}</button><button type="button" className="btn ghost" onClick={onClose}>Cancelar</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+function EditUserModal({ u, roles, onClose, onDone, onLink }: { u: any; roles: string[]; onClose: () => void; onDone: () => void; onLink: (l: any) => void }) {
+  const { me } = useSession();
+  const toast = useToast();
+  const [f, setF] = useState({ name: u.name, role: u.role });
+  const [err, setErr] = useState('');
+  const self = u.id === me?.user.id;
+  const external = ['owner', 'buyer'].includes(u.role);
+  const act = async (fn: () => Promise<void>) => { setErr(''); try { await fn(); } catch (x: any) { setErr(x.message); } };
+  return (
+    <Modal title={u.name} onClose={onClose}>
+      <div className="stack">
+        <p className="small muted" style={{ margin: 0 }}>{u.email}{u.last_login_at ? ` · último acesso em ${new Date(u.last_login_at).toLocaleString('pt-BR')}` : ' · nunca acessou'}</p>
+        <Field label="Nome"><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        <Field label="Perfil" hint={self ? 'Você não pode alterar o próprio perfil.' : external ? 'Proprietário e comprador têm vínculo próprio: para trocar, desative e convide de novo.' : 'Alterar o perfil encerra as sessões abertas.'}>
+          <select disabled={self || external} value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>{(external ? [u.role] : roles.filter((r) => STAFF_ROLES.includes(r))).map((r) => <option key={r} value={r}>{ROLES[r as Role]}</option>)}</select>
+        </Field>
+        {err && <p className="error-text">{err}</p>}
+        <div className="row"><button className="btn" onClick={() => act(async () => { await api(`/api/admin/users/${u.id}`, { method: 'PATCH', body: { name: f.name, ...(f.role !== u.role ? { role: f.role } : {}) } }); toast('Usuário atualizado'); onDone(); })}>Salvar</button></div>
+        <div className="stack-s" style={{ borderTop: '1px solid var(--line-2)', paddingTop: '0.8rem' }}>
+          {u.active && <button className="btn ghost small" onClick={() => act(async () => { const r = await api(`/api/admin/users/${u.id}/link`, { method: 'POST' }); onLink({ title: r.kind === 'invite' ? 'Novo link de convite' : 'Link para redefinir a senha', ...r }); })}>{u.has_password ? 'Gerar link para redefinir a senha' : 'Gerar novo link de convite'}</button>}
+          {u.mfa_enabled && !self && <button className="btn ghost small" onClick={() => act(async () => { await api(`/api/admin/users/${u.id}/reset-mfa`, { method: 'POST' }); toast('Verificação em duas etapas zerada. A pessoa configura de novo no próximo acesso.'); onDone(); })}>Zerar duas etapas (celular perdido)</button>}
+          {!self && <button className={u.active ? 'btn danger small' : 'btn ghost small'} onClick={() => act(async () => { await api(`/api/admin/users/${u.id}`, { method: 'PATCH', body: { active: !u.active } }); toast(u.active ? 'Acesso desativado e sessões encerradas' : 'Acesso reativado'); onDone(); })}>{u.active ? 'Desativar acesso' : 'Reativar acesso'}</button>}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function Users() {
-  const { data, loading } = useAsync(() => api('/api/admin/users'), []);
+  const { can, me } = useSession();
+  const { data, loading, reload } = useAsync(() => api('/api/admin/users'), []);
+  const [invite, setInvite] = useState(false);
+  const [edit, setEdit] = useState<any>(null);
+  const [link, setLink] = useState<any>(null);
+  const manage = !DEMO && can('user', 'create');
+  const roles = me?.user.role === 'platform_admin' ? Object.keys(ROLES) : ['dourado_admin', 'capture_manager', 'broker', 'owner', 'buyer'];
   return (
     <>
-      <PageHeader title="Usuários" />
-      <p className="muted small" style={{ marginTop: '-0.5rem' }}>Contas e senhas são gerenciadas na identidade WingsBr. Aqui aparecem os usuários que já acessaram este módulo e seus perfis.</p>
+      <PageHeader title="Usuários">{manage && <button className="btn gold" onClick={() => setInvite(true)}>Convidar usuário</button>}</PageHeader>
+      <p className="muted small" style={{ marginTop: '-0.5rem' }}>{DEMO ? 'Usuários fictícios da demonstração.' : 'O acesso é por convite: cada pessoa define a própria senha. Desativar encerra as sessões na hora.'}</p>
       {loading ? <Loading /> : (
-        <div className="table-wrap"><table className="data"><thead><tr><th>Nome</th><th>Perfil</th><th>Organização</th><th>Verificação em duas etapas</th><th>Situação</th></tr></thead>
-          <tbody>{data.items.map((u: any) => <tr key={u.id}><td><b>{u.name}</b><div className="small muted">{u.email}</div></td><td>{ROLES[u.role as Role]}</td><td className="small">{u.org_name}</td><td>{['platform_admin', 'dourado_admin', 'capture_manager'].includes(u.role) ? <span className={`badge ${u.mfa_enabled ? 'ok' : 'bad'}`}>{u.mfa_enabled ? 'Ativa' : 'Obrigatória — pendente'}</span> : <span className="muted small">Opcional</span>}</td><td>{u.active ? 'Ativo' : 'Desativado'}</td></tr>)}</tbody></table></div>
+        <div className="table-wrap"><table className="data"><thead><tr><th>Nome</th><th>Perfil</th><th>Organização</th><th>Duas etapas</th><th>Último acesso</th><th>Situação</th>{manage && <th />}</tr></thead>
+          <tbody>{data.items.map((u: any) => {
+            const [cls, label] = userStatus(u);
+            return <tr key={u.id} style={{ opacity: u.active ? 1 : 0.55 }}>
+              <td><b>{u.name}</b><div className="small muted">{u.email}</div></td>
+              <td>{ROLES[u.role as Role]}</td>
+              <td className="small">{u.org_name}</td>
+              <td>{u.mfa_enabled ? <span className="badge ok">Ativa</span> : MFA_ROLES.includes(u.role) ? <span className="badge bad">Obrigatória — pendente</span> : <span className="muted small">Opcional</span>}</td>
+              <td className="small">{u.last_login_at ? new Date(u.last_login_at).toLocaleDateString('pt-BR') : '—'}</td>
+              <td><span className={`badge ${cls}`}>{label}</span></td>
+              {manage && <td><button className="btn link small" onClick={() => setEdit(u)}>Gerenciar</button></td>}
+            </tr>;
+          })}</tbody></table></div>
       )}
+      {invite && <InviteModal roles={roles} onClose={() => setInvite(false)} onDone={(r) => { setInvite(false); setLink({ title: 'Convite criado', url: r.invite_url, expires_at: r.expires_at, email_sent: r.email_sent }); reload(); }} />}
+      {edit && <EditUserModal u={edit} roles={roles} onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }} onLink={(l) => { setEdit(null); setLink(l); }} />}
+      {link && <LinkModal link={link} onClose={() => setLink(null)} />}
+    </>
+  );
+}
+
+export function Account() {
+  const { me, login } = useSession();
+  const toast = useToast();
+  const [cur, setCur] = useState(''); const [p1, setP1] = useState(''); const [p2, setP2] = useState('');
+  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [settingUp, setSettingUp] = useState(false);
+  const [codes, setCodes] = useState<string[] | null>(null);
+  const [disablePw, setDisablePw] = useState('');
+  const mfaOn = !!me?.user.mfa;
+  const change = async (e: FormEvent) => {
+    e.preventDefault(); setErr('');
+    if (p1 !== p2) { setErr('As senhas novas não são iguais.'); return; }
+    setBusy(true);
+    try { await api('/api/auth/password/change', { body: { current: cur, password: p1 }, auth: false }); setCur(''); setP1(''); setP2(''); toast('Senha alterada. Outras sessões foram encerradas.'); await login(); }
+    catch (x: any) { setErr(x.message); }
+    setBusy(false);
+  };
+  return (
+    <>
+      <PageHeader title="Minha conta" />
+      <div className="grid2">
+        <form className="panel stack" onSubmit={change}>
+          <h2>Trocar senha</h2>
+          <p className="small muted" style={{ margin: 0 }}>{me?.user.email}</p>
+          <Field label="Senha atual"><input type="password" required autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} /></Field>
+          <Field label="Nova senha" hint="Pelo menos 10 caracteres."><input type="password" required minLength={10} autoComplete="new-password" value={p1} onChange={(e) => setP1(e.target.value)} /></Field>
+          <Field label="Repita a nova senha"><input type="password" required minLength={10} autoComplete="new-password" value={p2} onChange={(e) => setP2(e.target.value)} /></Field>
+          {err && <p className="error-text">{err}</p>}
+          <div><button className="btn" disabled={busy}>Alterar senha</button></div>
+        </form>
+        <div className="panel stack">
+          <h2>Verificação em duas etapas</h2>
+          {codes ? <RecoveryCodes codes={codes} onContinue={() => setCodes(null)} />
+            : settingUp ? <MfaSetup onDone={(c) => { setSettingUp(false); setCodes(c); void login(); }} />
+            : mfaOn ? <>
+              <p className="notice ok" style={{ margin: 0 }}>Ativa nesta conta.</p>
+              {MFA_ROLES.includes(me?.user.role ?? '') ? <p className="small muted" style={{ margin: 0 }}>Seu perfil exige duas etapas. Trocou de celular? Peça a outro administrador para zerar em Usuários.</p> : <form className="stack-s" onSubmit={async (e) => { e.preventDefault(); try { await api('/api/auth/mfa/disable', { body: { password: disablePw }, auth: false }); toast('Verificação desativada'); setDisablePw(''); await login(); } catch (x: any) { toast(x.message, true); } }}>
+                <Field label="Senha, para desativar"><input type="password" required value={disablePw} onChange={(e) => setDisablePw(e.target.value)} /></Field>
+                <div><button className="btn ghost small">Desativar</button></div>
+              </form>}
+            </> : <>
+              <p className="small muted" style={{ margin: 0 }}>Protege sua conta mesmo se a senha vazar. Você vai precisar de um aplicativo autenticador no celular.</p>
+              <div><button className="btn" onClick={() => setSettingUp(true)}>Ativar</button></div>
+            </>}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Leitura de matrícula por IA: transcreve e resume cada ato. O PDF não fica guardado. */
+export function MatriculaTool() {
+  const [file, setFile] = useState<File | null>(null);
+  const [res, setRes] = useState<any>(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault(); if (!file) return;
+    setBusy(true); setErr(''); setRes(null);
+    const form = new FormData(); form.append('file', file);
+    try { setRes(await api('/api/ai/matricula', { form })); } catch (x: any) { setErr(x.message); }
+    setBusy(false);
+  };
+  return (
+    <>
+      <PageHeader title="Leitura de matrícula" />
+      <form className="panel stack" onSubmit={submit} style={{ maxWidth: 640 }}>
+        <p className="small muted" style={{ margin: 0 }}>Envie o PDF da matrícula (escaneado ou digital). A IA transcreve o texto e resume cada ato. O arquivo é enviado ao provedor de IA para a leitura e não fica guardado na plataforma.</p>
+        <Field label="PDF da matrícula (até 32 MB)"><input type="file" accept="application/pdf,.pdf" required onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></Field>
+        {err && <p className="error-text">{err}</p>}
+        <div><button className="btn gold" disabled={busy || !file}>{busy ? 'Lendo a matrícula…' : 'Ler matrícula'}</button></div>
+      </form>
+      {res && <div className="panel stack" style={{ marginTop: '1rem' }}>
+        <p className="notice" style={{ margin: 0 }}>{res.aviso}</p>
+        <dl className="small" style={{ margin: 0 }}>
+          <div><b>Matrícula:</b> {res.matricula ?? '—'}</div><div><b>Cartório:</b> {res.cartorio ?? '—'}</div><div><b>Imóvel:</b> {res.imovel ?? '—'}</div><div><b>Área declarada:</b> {res.area_declarada ?? '—'}</div>
+          <div><b>Proprietários atuais:</b> {res.proprietarios_atuais?.join('; ') || '—'}</div>
+        </dl>
+        {res.onus_vigentes?.length > 0 ? <div className="notice bad" style={{ margin: 0 }}><b>Ônus vigentes:</b> {res.onus_vigentes.join('; ')}</div> : <p className="small" style={{ margin: 0 }}>Nenhum ônus vigente identificado na leitura.</p>}
+        {res.pontos_de_atencao?.length > 0 && <div className="small"><b>Pontos de atenção:</b> {res.pontos_de_atencao.join('; ')}</div>}
+        {res.atos?.length > 0 && <div className="table-wrap"><table className="data"><thead><tr><th>Ato</th><th>Data</th><th>Resumo</th></tr></thead><tbody>{res.atos.map((a: any, i: number) => <tr key={i}><td>{a.ato}</td><td className="small">{a.data ?? '—'}</td><td className="small">{a.resumo}</td></tr>)}</tbody></table></div>}
+        {res.transcricao && <details><summary>Transcrição integral</summary><pre className="small" style={{ whiteSpace: 'pre-wrap' }}>{res.transcricao}</pre></details>}
+      </div>}
     </>
   );
 }
@@ -127,6 +320,10 @@ const ACTION_LABEL: Record<string, string> = {
   'publication.submit': 'Enviou para aprovação', 'publication.approve': 'Aprovou publicação', 'publication.reject': 'Devolveu publicação', 'publication.unpublish': 'Retirou do portal',
   'document.access': 'Gerou link de documento', 'document.download': 'Baixou documento', 'interest.reassign': 'Transferiu interesse', 'interest.convert': 'Converteu interesse',
   'privacy.erase': 'Anonimizou titular', version: 'Nova versão de proposta',
+  'auth.login': 'Entrou', 'auth.failed': 'Tentativa de login incorreta', 'auth.locked': 'Conta bloqueada por tentativas', 'auth.invite_accepted': 'Aceitou o convite',
+  'auth.password_reset': 'Redefiniu a senha', 'auth.password_changed': 'Trocou a senha', 'auth.mfa_enabled': 'Ativou duas etapas', 'auth.mfa_disabled': 'Desativou duas etapas',
+  'auth.recovery_code': 'Usou código de recuperação', 'auth.reset_requested': 'Pediu redefinição de senha', 'user.invite': 'Convidou usuário', 'user.update': 'Alterou usuário',
+  'user.invite_link': 'Gerou link de convite', 'user.reset_link': 'Gerou link de redefinição', 'user.mfa_reset': 'Zerou duas etapas', 'export.dxf': 'Exportou DXF', 'export.kml': 'Exportou KML', 'ai.matricula': 'Leu matrícula por IA',
 };
 
 export function Audit() {
@@ -137,7 +334,7 @@ export function Audit() {
       <PageHeader title="Auditoria">
         <select className="input" style={{ width: 'auto' }} value={entity} onChange={(e) => setEntity(e.target.value)} aria-label="Entidade">
           <option value="">Todas as entidades</option>
-          {['land_opportunities', 'land_documents', 'land_geometries', 'land_owners', 'negotiations', 'proposals', 'commissions', 'opportunity_interests', 'whatsapp_routing_rules', 'land_brokers'].map((e) => <option key={e}>{e}</option>)}
+          {['users', 'land_opportunities', 'land_documents', 'land_geometries', 'land_owners', 'negotiations', 'proposals', 'commissions', 'opportunity_interests', 'whatsapp_routing_rules', 'land_brokers'].map((e) => <option key={e}>{e}</option>)}
         </select>
       </PageHeader>
       {loading ? <Loading /> : data.items.length === 0 ? <Empty title="Sem registros" /> : (

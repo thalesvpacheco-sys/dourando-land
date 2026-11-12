@@ -6,7 +6,7 @@ const api = process.env.API_URL ?? 'http://localhost:4200';
 /**
  * Modos de build:
  *  - (padrão)  `vite build`              → web/dist        — front real, conversa com a API em /api
- *  - demo      `vite build --mode demo`  → web/dist-demo   — artifact (frame): caminhos relativos, rota em memória
+ *  - demo      `vite build --mode demo`  → web/dist-demo   — demonstração em frame: caminhos relativos, rota em memória
  *  - static    `vite build --mode static`→ /site           — site publicável (Hostinger via git): URLs reais, backend simulado no navegador
  */
 export default defineConfig(({ mode }) => {

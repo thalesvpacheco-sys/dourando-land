@@ -2,15 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import * as maplibregl from 'maplibre-gl';
 import type { Map as MLMap } from 'maplibre-gl';
-import { LAND_TYPES, UFS, VIABILITY, formatArea, earthUrl } from '@dl/shared';
-import { api, qs } from '../lib/api';
-import { baseStyle, CITIES } from '../components/MapView';
+import area from '@turf/area';
+import length from '@turf/length';
+import { LAND_TYPES, TERRITORY_LAYERS, TERRITORY_LAYER_KEYS, UFS, VIABILITY, formatArea, parseCoordinates, type TerritoryLayer } from '@dl/shared';
+import { api, DEMO, downloadFile, qs } from '../lib/api';
+import { addSatellite, baseStyle, CITIES, HAS_SATELLITE, setSatelliteVisible } from '../components/MapView';
 import { Field, Modal, useToast } from '../components/ui';
 import { PageHeader } from './Shell';
 
-type Layer = 'sigef' | 'car';
-const LAYER_LABEL: Record<Layer, string> = { sigef: 'Imóveis certificados (SIGEF/INCRA)', car: 'Cadastro Ambiental Rural (CAR)' };
+type Layer = TerritoryLayer;
 const MIN_ZOOM = 12;
+const GROUP_LABEL: Record<string, string> = { parcel: 'Imóveis', environment: 'Ambiental (CAR)', restriction: 'Restrições' };
+const EMPTY = { type: 'FeatureCollection', features: [] } as any;
 
 /** Prospecção: explorar parcelas oficiais, identificar matrícula/cartório e abrir uma prospecção com o perímetro. */
 export default function TerritoryMap() {
@@ -20,7 +23,13 @@ export default function TerritoryMap() {
   const toast = useToast();
   const [status, setStatus] = useState<any>(null);
   const [uf, setUf] = useState('GO');
-  const [layers, setLayers] = useState<Record<Layer, boolean>>({ sigef: true, car: true });
+  const [layers, setLayers] = useState<Partial<Record<Layer, boolean>>>({ sigef: true, snci: true, car: true });
+  const [sat, setSat] = useState(HAS_SATELLITE);
+  const [tab, setTab] = useState<'explorar' | 'radar'>('explorar');
+  const [results, setResults] = useState<any>(null);
+  const [measuring, setMeasuring] = useState(false);
+  const [mPoints, setMPoints] = useState<number[][]>([]);
+  const measuringRef = useRef(measuring); measuringRef.current = measuring;
   const [info, setInfo] = useState<{ zoom: number; counts: Record<string, number>; loading: boolean; error?: string }>({ zoom: 0, counts: {}, loading: false });
   const [pick, setPick] = useState<any>(null);
   const [create, setCreate] = useState<any>(null);
@@ -34,13 +43,13 @@ export default function TerritoryMap() {
     const m = map.current;
     if (!m) return;
     const z = m.getZoom();
-    if (z < MIN_ZOOM) { setInfo({ zoom: z, counts: {}, loading: false }); (['sigef', 'car'] as Layer[]).forEach((l) => (m.getSource(l) as any)?.setData({ type: 'FeatureCollection', features: [] })); return; }
+    if (z < MIN_ZOOM) { setInfo({ zoom: z, counts: {}, loading: false }); TERRITORY_LAYER_KEYS.forEach((l) => (m.getSource(l) as any)?.setData(EMPTY)); return; }
     const b = m.getBounds();
     const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((v) => v.toFixed(5)).join(',');
     setInfo((s) => ({ ...s, zoom: z, loading: true, error: undefined }));
     const counts: Record<string, number> = {};
-    for (const l of ['sigef', 'car'] as Layer[]) {
-      if (!layersRef.current[l]) { (m.getSource(l) as any)?.setData({ type: 'FeatureCollection', features: [] }); continue; }
+    for (const l of TERRITORY_LAYER_KEYS) {
+      if (!layersRef.current[l]) { (m.getSource(l) as any)?.setData(EMPTY); continue; }
       try {
         const r = await api(`/api/territory/features${qs({ layer: l, bbox, uf: ufRef.current })}`);
         (m.getSource(l) as any)?.setData({ type: 'FeatureCollection', features: r.features });
@@ -63,16 +72,23 @@ export default function TerritoryMap() {
         d.textContent = `• ${name}`;
         new maplibregl.Marker({ element: d, anchor: 'left' }).setLngLat([lng, lat]).addTo(m);
       }
-      m.addSource('sigef', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      m.addSource('car', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      addSatellite(m);
+      setSatelliteVisible(m, HAS_SATELLITE);
+      // de baixo para cima: restrições e ambientais por baixo, parcelas por cima
+      for (const k of [...TERRITORY_LAYER_KEYS].reverse()) {
+        const meta = TERRITORY_LAYERS[k];
+        m.addSource(k, { type: 'geojson', data: EMPTY });
+        m.addLayer({ id: `${k}-fill`, type: 'fill', source: k, paint: { 'fill-color': meta.color, 'fill-opacity': meta.group === 'parcel' ? 0.08 : 0.3 } });
+        m.addLayer({ id: `${k}-line`, type: 'line', source: k, paint: { 'line-color': meta.color, 'line-width': meta.group === 'parcel' ? 1.5 : 1, ...(k === 'car' ? { 'line-dasharray': [3, 2] } : {}) } });
+      }
+      m.addSource('measure', { type: 'geojson', data: EMPTY });
       m.addSource('pick', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
       m.addSource('own', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      m.addLayer({ id: 'car-fill', type: 'fill', source: 'car', paint: { 'fill-color': '#2f7d4f', 'fill-opacity': 0.06 } });
-      m.addLayer({ id: 'car-line', type: 'line', source: 'car', paint: { 'line-color': '#2f7d4f', 'line-width': 1.2, 'line-dasharray': [3, 2] } });
-      m.addLayer({ id: 'sigef-fill', type: 'fill', source: 'sigef', paint: { 'fill-color': '#0a0a0a', 'fill-opacity': 0.05 } });
-      m.addLayer({ id: 'sigef-line', type: 'line', source: 'sigef', paint: { 'line-color': '#0a0a0a', 'line-width': 1.3 } });
       m.addLayer({ id: 'pick-fill', type: 'fill', source: 'pick', paint: { 'fill-color': '#f8b817', 'fill-opacity': 0.35 } });
-      m.addLayer({ id: 'pick-line', type: 'line', source: 'pick', paint: { 'line-color': '#0a0a0a', 'line-width': 3 } });
+      m.addLayer({ id: 'pick-line', type: 'line', source: 'pick', paint: { 'line-color': '#f8b817', 'line-width': 3 } });
+      m.addLayer({ id: 'measure-fill', type: 'fill', source: 'measure', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.2 } });
+      m.addLayer({ id: 'measure-line', type: 'line', source: 'measure', paint: { 'line-color': '#ffffff', 'line-width': 2.5, 'line-dasharray': [2, 1] } });
+      m.addLayer({ id: 'measure-pt', type: 'circle', source: 'measure', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 4, 'circle-color': '#ffffff', 'circle-stroke-color': '#0a0a0a', 'circle-stroke-width': 1.5 } });
       // prospecções já abertas (evita captação duplicada)
       try {
         const r = await api('/api/prospects?status=open,converted');
@@ -91,6 +107,7 @@ export default function TerritoryMap() {
     });
     m.on('moveend', () => void load());
     m.on('click', async (e) => {
+      if (measuringRef.current) { setMPoints((p) => [...p, [e.lngLat.lng, e.lngLat.lat]]); return; }
       if (m.getZoom() < MIN_ZOOM) { m.easeTo({ center: e.lngLat, zoom: MIN_ZOOM + 0.5 }); return; }
       setPick({ loading: true, lat: e.lngLat.lat, lng: e.lngLat.lng });
       try {
@@ -99,23 +116,56 @@ export default function TerritoryMap() {
         (m.getSource('pick') as any).setData({ type: 'FeatureCollection', features: r.parcels.filter((p: any) => p.geometry).slice(0, 1) });
       } catch (err: any) { setPick({ error: err.message }); }
     });
-    m.on('mousemove', (e) => { m.getCanvas().style.cursor = m.queryRenderedFeatures(e.point, { layers: ['sigef-fill', 'car-fill'] }).length ? 'pointer' : ''; });
+    m.on('mousemove', (e) => {
+      if (measuringRef.current) { m.getCanvas().style.cursor = 'crosshair'; return; }
+      const ids = TERRITORY_LAYER_KEYS.filter((k) => TERRITORY_LAYERS[k].group === 'parcel').map((k) => `${k}-fill`).filter((id) => m.getLayer(id));
+      m.getCanvas().style.cursor = ids.length && m.queryRenderedFeatures(e.point, { layers: ids }).length ? 'pointer' : '';
+    });
     return () => m.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [layers, uf]);
 
-  const go = () => {
+  useEffect(() => { const m = map.current; if (m?.isStyleLoaded()) setSatelliteVisible(m, sat); }, [sat]);
+
+  // medição: distância da linha e área do polígono, com turf (geodésico)
+  useEffect(() => {
+    const src = map.current?.getSource('measure') as any;
+    if (!src) return;
+    const pts = mPoints.map((c) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: c }, properties: {} }));
+    const line = mPoints.length >= 2 ? [{ type: 'Feature', geometry: { type: 'LineString', coordinates: mPoints }, properties: {} }] : [];
+    const poly = mPoints.length >= 3 ? [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[...mPoints, mPoints[0]]] }, properties: {} }] : [];
+    src.setData({ type: 'FeatureCollection', features: [...poly, ...line, ...pts] });
+  }, [mPoints]);
+  const mDist = mPoints.length >= 2 ? length({ type: 'Feature', geometry: { type: 'LineString', coordinates: mPoints }, properties: {} } as any, { units: 'meters' }) : 0;
+  const mArea = mPoints.length >= 3 ? area({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[...mPoints, mPoints[0]]] }, properties: {} } as any) : 0;
+
+  const fitFeature = (f: any) => {
     const m = map.current; if (!m) return;
-    const c = goto.match(/(-?\d+[.,]\d+)\s*[,; ]\s*(-?\d+[.,]\d+)/);
-    if (c) { m.flyTo({ center: [Number(c[2].replace(',', '.')), Number(c[1].replace(',', '.'))], zoom: 14 }); return; }
-    const city = CITIES.find(([n]) => n.toLowerCase().startsWith(goto.trim().toLowerCase()));
-    if (city) m.flyTo({ center: [city[1], city[2]], zoom: 12.5 }); else toast('Cidade não encontrada na lista. Use coordenadas: -16.68, -49.25', true);
+    (m.getSource('pick') as any)?.setData({ type: 'FeatureCollection', features: [f] });
+    if (f.bbox) m.fitBounds([[f.bbox[0], f.bbox[1]], [f.bbox[2], f.bbox[3]]], { padding: 80, maxZoom: 16 });
+    else if (f.center) m.flyTo({ center: f.center, zoom: 14 });
+  };
+  const go = async () => {
+    const m = map.current; if (!m || !goto.trim()) return;
+    setResults(null);
+    const c = parseCoordinates(goto);
+    if (c) { m.flyTo({ center: [c.lng, c.lat], zoom: 15 }); return; }
+    const city = CITIES.find(([n]) => n.toLowerCase() === goto.trim().toLowerCase());
+    if (city) { m.flyTo({ center: [city[1], city[2]], zoom: 12.5 }); return; }
+    if (DEMO) { toast('Na demonstração, busque por cidade da lista ou coordenadas: -16.68, -49.25', true); return; }
+    try {
+      const r = await api(`/api/territory/search${qs({ q: goto.trim(), uf })}`);
+      if (r.features.length === 1 && !r.internal.length) { fitFeature(r.features[0]); return; }
+      setResults(r);
+    } catch (e: any) { toast(e.message, true); }
   };
   const choose = (f: any) => { (map.current?.getSource('pick') as any)?.setData({ type: 'FeatureCollection', features: [f] }); setPick({ ...pick, chosen: f }); };
 
   const mode = status?.mode;
+  const available: any[] = (status?.layers ?? []).filter((l: any) => l.status !== 'pending');
+  const pending: any[] = (status?.layers ?? []).filter((l: any) => l.status === 'pending');
   return (
     <>
       <PageHeader title="Prospecção no mapa">
@@ -126,27 +176,63 @@ export default function TerritoryMap() {
         <div className="territory-map">
           <div ref={el} className="map" />
           <div className="map-legend">
-            <span><i style={{ border: '2px solid #0a0a0a' }} />SIGEF/INCRA — imóvel certificado</span>
-            <span><i style={{ border: '1.5px dashed #2f7d4f' }} />CAR — imóvel cadastrado</span>
+            {available.filter((l) => layers[l.key as Layer]).map((l) => <span key={l.key}><i style={{ border: `2px solid ${TERRITORY_LAYERS[l.key as Layer].color}` }} />{TERRITORY_LAYERS[l.key as Layer].short}</span>)}
             <span><i style={{ background: '#0a0a0a', border: '2px solid #f8b817' }} />Prospecção já aberta</span>
           </div>
+          <div className="map-tools">
+            {HAS_SATELLITE && <div className="seg" role="group" aria-label="Mapa base">
+              <button type="button" aria-pressed={sat} onClick={() => setSat(true)}>Satélite</button>
+              <button type="button" aria-pressed={!sat} onClick={() => setSat(false)}>Mapa</button>
+            </div>}
+            <button type="button" className="btn small" style={{ background: measuring ? 'var(--gold)' : '#fff', color: '#0a0a0a' }} aria-pressed={measuring} onClick={() => { setMeasuring(!measuring); setMPoints([]); }}>{measuring ? 'Encerrar medição' : 'Medir'}</button>
+          </div>
+          {measuring && <div className="map-measure" role="status">
+            {mPoints.length === 0 ? 'Clique no mapa para marcar os pontos' : <>Distância: <b>{mDist >= 1000 ? `${(mDist / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} km` : `${Math.round(mDist).toLocaleString('pt-BR')} m`}</b>{mArea > 0 && <> · Área: <b>{formatArea(mArea)}</b></>}</>}
+            {mPoints.length > 0 && <button type="button" className="btn link small" onClick={() => setMPoints([])}>Limpar</button>}
+          </div>}
           {info.zoom < MIN_ZOOM && <div className="map-hint">Aproxime o mapa (ou clique) para carregar as parcelas</div>}
         </div>
         <aside className="territory-side">
+          {!DEMO && <div className="seg wide" role="tablist" aria-label="Modo">
+            <button type="button" role="tab" aria-selected={tab === 'explorar'} aria-pressed={tab === 'explorar'} onClick={() => setTab('explorar')}>Explorar</button>
+            <button type="button" role="tab" aria-selected={tab === 'radar'} aria-pressed={tab === 'radar'} onClick={() => setTab('radar')}>Radar de captação</button>
+          </div>}
+          {tab === 'radar' && <Radar uf={uf} setUf={setUf} onShow={fitFeature} onCreate={(f) => setCreate({
+            title: f.properties.nome || `Área em ${f.properties.municipio ?? uf}`, uf: f.properties.uf ?? uf, city: f.properties.municipio ?? '', land_type: 'gleba', intended_uses: [], geojson: f.geometry, area: f.properties.area_ha,
+            territory: [{ layer: f.properties.layer, source: f.properties.fonte, consulted_at: new Date().toISOString(), properties: f.properties }], registry: null, lat: f.center?.[1], lng: f.center?.[0],
+          })} />}
+          {tab === 'explorar' && <>
           <div className="stack-s">
             <div className="row">
               <select className="input" style={{ width: 80 }} value={uf} onChange={(e) => setUf(e.target.value)} aria-label="UF">{UFS.map((u) => <option key={u}>{u}</option>)}</select>
-              <form className="row" style={{ flex: 1, flexWrap: 'nowrap' }} onSubmit={(e) => { e.preventDefault(); go(); }}>
-                <input className="input" placeholder="Cidade ou coordenadas" value={goto} onChange={(e) => setGoto(e.target.value)} aria-label="Ir para" />
+              <form className="row" style={{ flex: 1, flexWrap: 'nowrap' }} onSubmit={(e) => { e.preventDefault(); void go(); }}>
+                <input className="input" placeholder={DEMO ? 'Cidade ou coordenadas' : 'CAR, certificação, matrícula, nome, coordenadas'} value={goto} onChange={(e) => setGoto(e.target.value)} aria-label="Localizar" />
                 <button className="btn small">Ir</button>
               </form>
             </div>
-            {(['sigef', 'car'] as Layer[]).map((l) => (
-              <label key={l} className="check small"><input type="checkbox" checked={layers[l]} onChange={(e) => setLayers({ ...layers, [l]: e.target.checked })} />
-                <span>{LAYER_LABEL[l]}{info.counts[l] != null && <span className="muted"> · {info.counts[l]} no recorte</span>}
-                  {status && <span className={`badge ${status.layers.find((x: any) => x.key === l)?.status === 'implemented' ? 'ok' : 'warn'}`} style={{ marginLeft: 6 }}>{({ implemented: 'conectado', simulated: 'simulado', pending: 'pendente' } as any)[status.layers.find((x: any) => x.key === l)?.status]}</span>}</span>
-              </label>
-            ))}
+            {!DEMO && <span className="small muted">Coordenadas: -16.68, -49.25 · 16°40'48"S 49°15'00"W · 22 683000 8155000</span>}
+            {results && <div className="stack-s">
+              {results.features.length + results.internal.length === 0 && <p className="small">Nada encontrado nas bases carregadas.</p>}
+              {results.internal.map((x: any) => <Link key={x.id} className="parcel-card" to={x.kind === 'prospect' ? `/painel/captacao/${x.id}` : `/painel/areas/${x.id}`}><b>{x.code}</b><span className="small">{x.title}</span><span className="small muted">{x.city ?? '—'}/{x.uf ?? '—'}</span></Link>)}
+              {results.features.map((f: any) => <button type="button" key={f.id} className="parcel-card" onClick={() => fitFeature(f)}><b>{TERRITORY_LAYERS[f.properties.layer as Layer]?.short}</b><span className="small">{f.properties.nome ?? '—'}</span><span className="small muted" style={{ wordBreak: 'break-all' }}>{f.properties.codigo}</span><span className="small">{f.properties.municipio ?? ''}{f.properties.area_ha != null ? ` · ${f.properties.area_ha.toLocaleString('pt-BR')} ha` : ''}</span></button>)}
+            </div>}
+            {['parcel', 'environment', 'restriction'].map((g) => {
+              const items = available.filter((l) => (l.group ?? TERRITORY_LAYERS[l.key as Layer]?.group) === g);
+              if (!items.length) return null;
+              return <div key={g} className="stack-s"><span className="small muted"><b>{GROUP_LABEL[g]}</b></span>
+                {items.map((l) => (
+                  <label key={l.key} className="check small"><input type="checkbox" checked={!!layers[l.key as Layer]} onChange={(e) => setLayers({ ...layers, [l.key]: e.target.checked })} />
+                    <span><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: TERRITORY_LAYERS[l.key as Layer].color, marginRight: 5 }} />{TERRITORY_LAYERS[l.key as Layer].label}
+                      {info.counts[l.key] != null && <span className="muted"> · {info.counts[l.key]} no recorte</span>}
+                      {l.status === 'simulated' && <span className="badge warn" style={{ marginLeft: 6 }}>simulado</span>}
+                      {l.ufs?.length > 0 && <span className="muted"> · {l.ufs.join(', ')}</span>}
+                    </span>
+                  </label>
+                ))}</div>;
+            })}
+            {!DEMO && pending.length > 0 && <details className="small"><summary>{pending.length} bases ainda não carregadas</summary>
+              <ul style={{ margin: '0.3rem 0 0', paddingLeft: '1.1rem' }}>{pending.map((l) => <li key={l.key}><a href={l.official_url} target="_blank" rel="noopener noreferrer">{TERRITORY_LAYERS[l.key as Layer]?.label ?? l.name}</a></li>)}</ul>
+            </details>}
             {info.loading && <span className="small muted">Carregando parcelas…</span>}
             {info.error && <span className="error-text">{info.error}</span>}
           </div>
@@ -166,11 +252,17 @@ export default function TerritoryMap() {
                 const chosen = pick.chosen === p || (!pick.chosen && i === 0);
                 return (
                   <button type="button" key={i} className={`parcel-card ${chosen ? 'on' : ''}`} onClick={() => choose(p)}>
-                    <span className="row" style={{ justifyContent: 'space-between' }}><b>{pr.layer === 'sigef' ? 'SIGEF' : 'CAR'}</b>{pr.ficticio && <span className="badge warn">fictício</span>}</span>
+                    <span className="row" style={{ justifyContent: 'space-between' }}><b>{TERRITORY_LAYERS[pr.layer as Layer]?.short ?? pr.layer}</b>{pr.ficticio && <span className="badge warn">fictício</span>}</span>
                     {pr.nome && <span>{pr.nome}</span>}
                     <span className="small muted" style={{ wordBreak: 'break-all' }}>{pr.codigo}</span>
                     <span className="small">{pr.area_ha != null ? `${pr.area_ha.toLocaleString('pt-BR')} ha` : ''}{pr.situacao ? ` · ${pr.situacao}` : ''}</span>
                     {pr.matricula && <span className="small">Matrícula {pr.matricula}{pr.cns_serventia ? ` · CNS ${pr.cns_serventia}` : ''}</span>}
+                    {pr.municipio && <span className="small muted">{pr.municipio}{pr.uf ? `/${pr.uf}` : ''}</span>}
+                    {pr.id != null && <span className="row" style={{ marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
+                      <span role="button" tabIndex={0} className="btn ghost small" onClick={() => void downloadFile(`/api/territory/features/${pr.id}/kml`, `${pr.layer}-${pr.id}.kml`).catch((x) => toast(x.message, true))}>KML</span>
+                      <span role="button" tabIndex={0} className="btn ghost small" onClick={() => void downloadFile(`/api/territory/features/${pr.id}/dxf`, `${pr.layer}-${pr.id}.dxf`).catch((x) => toast(x.message, true))}>DXF</span>
+                      <span role="button" tabIndex={0} className="btn ghost small" onClick={() => void navigator.clipboard?.writeText(pr.codigo).then(() => toast('Código copiado'))}>Copiar código</span>
+                    </span>}
                   </button>
                 );
               })}
@@ -199,10 +291,61 @@ export default function TerritoryMap() {
               }}>Criar prospecção {pick.parcels.some((p: any) => p.properties) ? 'com este perímetro' : 'neste ponto'}</button>
             </div>
           )}
+          </>}
         </aside>
       </div>
       {create && <CreateProspect init={create} onClose={() => setCreate(null)} onCreated={(id) => nav(`/painel/captacao/${id}`)} />}
     </>
+  );
+}
+
+/** Radar: encontra parcelas candidatas por critério ou a partir de um perfil de aquisição. */
+function Radar({ uf, setUf, onShow, onCreate }: { uf: string; setUf: (u: string) => void; onShow: (f: any) => void; onCreate: (f: any) => void }) {
+  const [f, setF] = useState({ municipio: '', min_ha: '', max_ha: '', layer: 'sigef', exclude_restrictions: true, profile_id: '' });
+  const [profiles, setProfiles] = useState<any[]>([]);
+  const [res, setRes] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => { api('/api/profiles').then((r) => setProfiles(r.items ?? [])).catch(() => {}); }, []);
+  const run = async (e: React.FormEvent) => {
+    e.preventDefault(); setBusy(true); setErr('');
+    try {
+      setRes(await api(`/api/territory/radar${qs({ uf: f.profile_id ? undefined : uf, municipio: f.municipio, min_ha: f.min_ha, max_ha: f.max_ha, layer: f.layer, exclude_restrictions: f.exclude_restrictions ? '1' : '0', profile_id: f.profile_id })}`));
+    } catch (x: any) { setErr(x.message); }
+    setBusy(false);
+  };
+  return (
+    <form className="stack-s" onSubmit={run}>
+      <p className="small muted" style={{ margin: 0 }}>Encontre imóveis que atendem a um critério e ainda não estão no sistema. Ser candidato não significa estar à venda.</p>
+      {profiles.length > 0 && <Field label="Partir de um perfil de aquisição"><select value={f.profile_id} onChange={(e) => setF({ ...f, profile_id: e.target.value })}><option value="">Nenhum (critérios abaixo)</option>{profiles.map((p) => <option key={p.id} value={p.id}>{p.name}{p.partner_name ? ` — ${p.partner_name}` : ''}</option>)}</select></Field>}
+      <div className="grid2">
+        <Field label="UF"><select value={uf} onChange={(e) => setUf(e.target.value)} disabled={!!f.profile_id}>{UFS.map((u) => <option key={u}>{u}</option>)}</select></Field>
+        <Field label="Base"><select value={f.layer} onChange={(e) => setF({ ...f, layer: e.target.value })}><option value="sigef">SIGEF</option><option value="snci">SNCI</option><option value="car">CAR</option></select></Field>
+      </div>
+      <Field label="Município"><input value={f.municipio} onChange={(e) => setF({ ...f, municipio: e.target.value })} /></Field>
+      <div className="grid2">
+        <Field label="De (ha)"><input inputMode="decimal" value={f.min_ha} onChange={(e) => setF({ ...f, min_ha: e.target.value })} /></Field>
+        <Field label="Até (ha)"><input inputMode="decimal" value={f.max_ha} onChange={(e) => setF({ ...f, max_ha: e.target.value })} /></Field>
+      </div>
+      <label className="check small"><input type="checkbox" checked={f.exclude_restrictions} onChange={(e) => setF({ ...f, exclude_restrictions: e.target.checked })} /> Excluir sobreposição com restrições carregadas</label>
+      <button className="btn gold" disabled={busy}>{busy ? 'Buscando…' : 'Buscar candidatas'}</button>
+      {err && <p className="error-text">{err}</p>}
+      {res && !res.loaded && <p className="notice" style={{ margin: 0 }}>A base {f.layer.toUpperCase()} de {res.filter?.uf} ainda não foi carregada. Veja o manual de publicação.</p>}
+      {res?.loaded && <>
+        <p className="small muted" style={{ margin: 0 }}><b>{res.items.length}{res.items.length === 100 ? '+' : ''}</b> candidatas. Fonte: {res.source}, base de {new Date(res.loaded_at).toLocaleDateString('pt-BR')}. {res.restrictions_checked.length ? `Restrições conferidas: ${res.restrictions_checked.map((k: Layer) => TERRITORY_LAYERS[k].short).join(', ')}.` : 'Nenhuma base de restrição carregada para esta UF.'}</p>
+        {res.items.map((c: any) => (
+          <div key={c.id} className="parcel-card" style={{ cursor: 'default' }}>
+            <span className="row" style={{ justifyContent: 'space-between' }}><b>{c.properties.nome ?? c.properties.codigo}</b>{c.demand_count > 0 && <span className="badge ok">{c.demand_count} comprador(es)</span>}</span>
+            <span className="small">{c.properties.municipio ?? '—'} · {c.properties.area_ha?.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ha</span>
+            {c.demand?.[0] && <span className="small muted">{c.demand[0].partner}: {c.demand[0].profile}</span>}
+            <span className="row" style={{ marginTop: 4 }}>
+              <button type="button" className="btn ghost small" onClick={() => onShow(c)}>Ver no mapa</button>
+              <button type="button" className="btn gold small" onClick={() => onCreate(c)}>Criar prospecção</button>
+            </span>
+          </div>
+        ))}
+      </>}
+    </form>
   );
 }
 

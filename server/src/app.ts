@@ -19,17 +19,41 @@ import { router as dashboard } from './routes/dashboard.js';
 import { router as admin } from './routes/admin.js';
 import { router as ai, publicAiRouter } from './routes/ai.js';
 import { router as prospects, territoryRouter } from './routes/prospects.js';
+import { router as auth } from './routes/auth.js';
 
 export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  const extra = config.cspExtraHosts;
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        'img-src': ["'self'", 'data:', 'blob:', ...extra],
+        'connect-src': ["'self'", ...extra],
+        'worker-src': ["'self'", 'blob:'],
+        'script-src': ["'self'", ...extra],
+        'upgrade-insecure-requests': config.cookieSecure ? [] : null,
+      },
+    },
+  }));
   app.use(cors({ origin: config.isProd ? config.publicWebUrl : true, credentials: false }));
 
   // webhook precisa do corpo bruto para validar a assinatura — registrado antes do parser JSON
   app.use('/webhooks', webhookRouter);
   app.use(express.json({ limit: '2mb' }));
+
+  // Defesa extra contra CSRF: além do cookie SameSite=Strict, recusa escrita vinda de outra origem.
+  if (config.isProd) {
+    const allowed = new URL(config.publicWebUrl).origin;
+    app.use((req, res, next) => {
+      const origin = req.headers.origin;
+      if (origin && origin !== allowed && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return void res.status(403).json({ error: 'Origem não permitida' });
+      next();
+    });
+  }
 
   app.get('/health', ah(async (_req, res) => {
     await db.raw('select 1');
@@ -43,6 +67,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/public/ai', publicAiRouter);
   app.use('/api/files', filesRouter);
+  app.use('/api/auth', auth);
 
   // login de demonstração: emite tokens no formato da identidade WingsBr (desligado em produção)
   if (config.enableDevLogin) {
@@ -86,6 +111,14 @@ export function createApp() {
   }));
 
   app.use('/api', api);
+  app.use('/api', (_req, res) => { res.status(404).json({ error: 'Rota não encontrada' }); });
+
+  // Front servido pela própria API: mesma origem e nenhum proxy extra para configurar
+  if (config.webDist) {
+    const dist = config.webDist;
+    app.use(express.static(dist, { index: false, maxAge: '1h', setHeaders: (res, p) => { if (p.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); } }));
+    app.get(/.*/, (_req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(dist, 'index.html')));
+  }
   app.use(errorHandler);
   return app;
 }

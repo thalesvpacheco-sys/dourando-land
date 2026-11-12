@@ -11,6 +11,7 @@ import { ErrorBox, Field, Loading, Modal, ValidationBadge, useAsync, useToast } 
 import { pubBadge } from './Areas';
 import { techValue } from '../public/Detail';
 import OverlapPanel from '../components/OverlapPanel';
+import EnvironmentPanel from '../components/EnvironmentPanel';
 import { EarthTools, Google3DView } from '../components/EarthTools';
 
 const STEPS = ['Identificação', 'Localização e perímetro', 'Urbanístico e técnico', 'Condições comerciais', 'Proprietários e documentos', 'Imagens', 'Responsável e publicação', 'Compradores compatíveis'];
@@ -176,6 +177,7 @@ export default function AreaEditor() {
           )}
 
           {step === 2 && o.geometry && <OverlapPanel url={`/api/opportunities/${o.id}/overlap`} />}
+          {step === 2 && o.geometry && <EnvironmentPanel url={`/api/opportunities/${o.id}/environment`} onApply={async (m2) => { update('fields', 'usable_area_m2', m2, String(m2)); toast(`Área aproveitável atualizada: ${formatArea(m2)}`); }} />}
           {step === 2 && o.lat != null && <Google3DView lat={o.lat} lng={o.lng} areaM2={o.geometry?.area_m2} geometry={o.geometry?.geometry} name={o.code} />}
           {step === 3 && <TechnicalStep o={o} update={update} />}
 

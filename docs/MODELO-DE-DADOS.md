@@ -88,3 +88,11 @@ erDiagram
 | `import_runs` | `source`, `origin_label`, `mode` (preview/apply), `summary` (criadas, atualizadas, sem mudança, conflitos, pastas sumidas), `created_by`, datas |
 | `import_items` | uma linha por pasta: `external_key` (caminho), `entity_type`/`entity_id` (área ou prospecção), `content_hash`, `sheet_hash`, `imported` (retrato dos valores gravados, para detectar edição manual), `issues`, `status` (active/missing). Único por organização + origem + caminho |
 | `import_files` | um registro por arquivo (`sha256`) e destino: document, media, geometry, pending (anexa na conversão da prospecção) ou skipped |
+
+
+## Login e bases territoriais (migração 004)
+
+- `users`: `password_hash` (scrypt), `mfa_secret_enc` (cifrado), `mfa_recovery_hashes`, `mfa_last_step`, `failed_logins`, `locked_until`, `last_login_at`, `session_version`. E-mail único sem diferenciar maiúsculas.
+- `auth_tokens`: convites e redefinições de uso único. Guarda só o hash do token.
+- `territory_features`: polígonos das bases oficiais (`layer`, `uf`, `code`, `name`, `area_ha`, `municipio`, `situacao`, `matricula`, `raw`, `geom`).
+- `territory_datasets`: o que foi carregado, de qual arquivo e quando.

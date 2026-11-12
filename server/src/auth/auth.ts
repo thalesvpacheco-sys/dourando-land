@@ -28,7 +28,7 @@ declare global {
 }
 
 /** Claims esperadas do JWT emitido pela identidade WingsBr. */
-interface Claims { sub: string; org: string; role: Role; name: string; email: string; amr?: string[] }
+interface Claims { sub: string; org: string; role: Role; name: string; email: string; amr?: string[]; sv?: number }
 
 export function signDevToken(c: Claims, ttl = '8h') {
   return jwt.sign(c, config.jwtSecret, { algorithm: 'HS256', issuer: config.jwtIssuer, expiresIn: ttl } as jwt.SignOptions);
@@ -40,11 +40,14 @@ async function loadUser(c: Claims): Promise<AuthUser> {
   if (!org) throw new HttpError(401, 'Organização desconhecida');
   let u = await db('users').where({ external_id: c.sub }).first();
   if (!u) {
-    // Provisionamento JIT a partir da identidade WingsBr
+    if (!config.allowJitProvisioning) throw new HttpError(401, 'Usuário desconhecido');
+    // Provisionamento JIT a partir de token externo (somente desenvolvimento e testes)
     [u] = await db('users').insert({ external_id: c.sub, org_id: c.org, name: c.name, email: c.email, role: c.role }).returning('*');
   }
   if (!u.active) throw new HttpError(401, 'Usuário desativado');
   if (u.org_id !== c.org) throw new HttpError(401, 'Token não corresponde à organização do usuário');
+  // Troca de senha, desativação ou 'encerrar sessões' invalidam os tokens anteriores.
+  if (c.sv === undefined ? !config.enableDevLogin : c.sv !== u.session_version) throw new HttpError(401, 'Sessão encerrada. Entre novamente.');
   const broker = u.role === 'broker' ? await db('land_brokers').where({ user_id: u.id }).first() : null;
   const partnerRows = u.role === 'buyer' ? await db('partner_companies').where({ partner_org_id: u.org_id }).select('id', 'org_id') : [];
   const partners = partnerRows.map((p: any) => p.id);
@@ -54,10 +57,20 @@ async function loadUser(c: Claims): Promise<AuthUser> {
   };
 }
 
+export const SESSION_COOKIE = 'dl_session';
+
+export function readCookie(req: Request, name: string): string | null {
+  for (const part of (req.headers.cookie ?? '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return null;
+}
+
 function extractToken(req: Request) {
   const h = req.headers.authorization;
-  if (h?.startsWith('Bearer ')) return h.slice(7);
-  return null;
+  if (h?.startsWith('Bearer ') && h.length > 7) return h.slice(7);
+  return readCookie(req, SESSION_COOKIE);
 }
 
 export async function authenticate(req: Request, _res: Response, next: NextFunction) {
@@ -73,6 +86,13 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   } catch (e) {
     next(e instanceof HttpError ? e : new HttpError(401, 'Token inválido ou expirado'));
   }
+}
+
+export interface SessionUser { external_id: string; org_id: string; role: Role; name: string; email: string; session_version: number }
+
+/** Sessão do login próprio. `mfa` indica que a segunda etapa foi confirmada nesta entrada. */
+export function signSession(u: SessionUser, mfa: boolean) {
+  return signDevToken({ sub: u.external_id, org: u.org_id, role: u.role, name: u.name, email: u.email, amr: mfa ? ['pwd', 'mfa'] : ['pwd'], sv: u.session_version }, `${config.sessionHours}h`);
 }
 
 /** Autenticação opcional (rotas públicas que se enriquecem com login, ex.: vitrine privada). */

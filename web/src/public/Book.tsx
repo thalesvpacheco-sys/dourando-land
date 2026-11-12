@@ -27,7 +27,7 @@ export default function Book() {
         <div className="book-toolbar">
           <Link to={`/areas/${a.slug}`} style={{ color: '#fff' }}>Voltar à área</Link>
           {FRAMED ? <span className="small" style={{ color: '#c3cbc8' }}>Em produção: Baixar PDF e Imprimir (bloqueados no frame da demonstração)</span> : <div className="row">
-            {!DEMO && <a className="btn ghost small" style={{ color: '#fff', borderColor: '#5a6b70' }} href={`/api/public/opportunities/${a.slug}/book.pdf`}>Baixar PDF</a>}
+            <a className="btn ghost small" style={{ color: '#fff', borderColor: '#5a6b70' }} href={`/api/public/opportunities/${a.slug}/book.pdf`}>Baixar PDF</a>
             <button className="btn gold small" onClick={() => window.print()}>Imprimir / salvar PDF</button>
           </div>}
         </div>
