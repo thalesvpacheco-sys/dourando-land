@@ -26,15 +26,18 @@ export function createApp() {
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
   const extra = config.cspExtraHosts;
+  // Hosts que a Maps JavaScript API usa (lista de liberação recomendada pela Google), só quando a vista 3D tem chave
+  const g = config.googleMaps3d ? ['https://*.googleapis.com', 'https://*.gstatic.com', 'https://*.google.com', 'https://*.ggpht.com', 'https://*.googleusercontent.com'] : [];
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: {
       useDefaults: true,
       directives: {
-        'img-src': ["'self'", 'data:', 'blob:', ...extra],
-        'connect-src': ["'self'", ...extra],
+        'img-src': ["'self'", 'data:', 'blob:', ...extra, ...g],
+        'connect-src': ["'self'", ...extra, ...g, ...(g.length ? ['data:', 'blob:'] : [])],
         'worker-src': ["'self'", 'blob:'],
-        'script-src': ["'self'", ...extra],
+        'script-src': ["'self'", ...extra, ...g, ...(g.length ? ['blob:'] : [])],
+        ...(g.length ? { 'frame-src': ["'self'", 'https://*.google.com'] } : {}),
         'upgrade-insecure-requests': config.cookieSecure ? [] : null,
       },
     },

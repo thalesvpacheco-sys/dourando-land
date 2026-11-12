@@ -36,6 +36,8 @@ export const config = {
   webDist: env.WEB_DIST_DIR ? path.resolve(env.WEB_DIST_DIR) : null,
   // Hosts extras na política de segurança (ex.: provedor de mapas)
   cspExtraHosts: (env.CSP_EXTRA_HOSTS ?? '').split(/[\s,]+/).filter(Boolean),
+  // Vista 3D (Google 3D Maps): a chave entra no build do front; o servidor só precisa saber se ela existe (CSP e Integrações)
+  googleMaps3d: !!env.VITE_GOOGLE_MAPS_API_KEY || env.GOOGLE_MAPS_3D_ENABLED === 'true',
   dataKey: Buffer.from(required('DATA_KEY', crypto.createHash('sha256').update('dev-data-key').digest('hex')), 'hex'),
   crmUrl: env.WINGSBR_CRM_URL || null,
   crmSecret: env.WINGSBR_CRM_SECRET ?? '',
