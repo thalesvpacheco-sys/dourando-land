@@ -8,6 +8,8 @@ import { PageHeader } from './Shell';
 
 const CHANNELS: Record<string, string> = { google_ads: 'Google Ads', meta_ads: 'Meta Ads', organic: 'Orgânico', direct: 'Direto', referral: 'Indicação/sites', email: 'E-mail', social: 'Redes sociais', cpc: 'Mídia paga' };
 const compactBRL = (v: number) => (v >= 1e6 ? `R$ ${(v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi` : formatBRL(v));
+/** "1 disponível", "2 disponíveis". */
+const plural = (n: number, one: string, many: string) => `${Number(n).toLocaleString('pt-BR')} ${Number(n) === 1 ? one : many}`;
 
 export default function Dashboard() {
   const [days, setDays] = useState(90);
@@ -32,12 +34,13 @@ export default function Dashboard() {
       </PageHeader>
 
       <div className="kpis" style={{ marginBottom: '1rem' }}>
-        <div className="kpi"><span>Áreas cadastradas</span><b className="num">{d.areas.total}</b><small>{d.areas.available} disponíveis · {d.areas.published} publicadas</small></div>
-        <div className="kpi"><span>Área territorial</span><b className="num">{formatArea(d.areas.total_area_m2)}</b><small>{d.areas.new_captures} novas captações no período</small></div>
+        <div className="kpi"><span>Áreas cadastradas</span><b className="num">{d.areas.total}</b><small>{plural(d.areas.available, 'disponível', 'disponíveis')} · {plural(d.areas.published, 'publicada', 'publicadas')}</small></div>
+        <div className="kpi"><span>Área territorial</span><b className="num">{formatArea(d.areas.total_area_m2)}</b><small>{plural(d.areas.new_captures, 'área nova', 'áreas novas')} no período</small></div>
         <div className="kpi"><span>Valor potencial</span><b className="num">{compactBRL(d.potential_value)}</b><small>VGV preliminar {compactBRL(d.potential_vgv)}</small></div>
-        <div className="kpi"><span>Interessados</span><b className="num">{d.interests.total}</b><small>{d.interests.identified} identificados ({conv}%) · {d.interests.confirmed_conversations} conversas confirmadas</small></div>
-        <div className="kpi"><span>Negociações ativas</span><b className="num">{d.negotiations.active}</b><small>{d.negotiations.proposals} propostas · {d.negotiations.won} concluídas</small></div>
-        {d.prospects && <div className="kpi"><span>Captação em andamento</span><b className="num">{d.prospects.open}</b><small>{formatArea(d.prospects.open_area_m2)} · {d.prospects.converted} convertidas no período</small></div>}
+        <div className="kpi"><span>Interessados</span><b className="num">{d.interests.total}</b><small>{plural(d.interests.identified, 'identificado', 'identificados')} ({conv}%) · {plural(d.interests.confirmed_conversations, 'conversa confirmada', 'conversas confirmadas')}</small></div>
+        <div className="kpi"><span>Negociações ativas</span><b className="num">{d.negotiations.active}</b><small>{plural(d.negotiations.proposals, 'proposta', 'propostas')} · {plural(d.negotiations.won, 'concluída', 'concluídas')}</small></div>
+        {/* Prospecções do funil (ainda não viraram área). Não confundir com áreas na situação "Captação", no gráfico abaixo. */}
+        {d.prospects && <div className="kpi"><span>Prospecções no funil</span><b className="num">{d.prospects.open}</b><small>{formatArea(d.prospects.open_area_m2)} · {plural(d.prospects.converted, 'virou área', 'viraram área')} no período</small></div>}
         {d.commission && <div className="kpi"><span>Comissão prevista</span><b className="num">{compactBRL(d.commission.forecast)}</b><small>Realizada {compactBRL(d.commission.realized)} · exigível {compactBRL(d.commission.receivable)}</small></div>}
       </div>
 
@@ -77,7 +80,7 @@ export default function Dashboard() {
       <div className="grid3">
         <div className="panel"><div className="panel-head"><h2>Áreas por estado</h2></div><HBars data={d.by_uf.map((u: any) => ({ label: u.uf, value: Number(u.n) }))} /></div>
         <div className="panel"><div className="panel-head"><h2>Áreas por modalidade</h2></div><HBars data={d.by_modality.map((m: any) => ({ label: MODALITIES[m.modality as Modality] ?? m.modality, value: Number(m.n) }))} /></div>
-        <div className="panel"><div className="panel-head"><h2>Áreas por situação</h2></div><HBars data={d.by_status.map((m: any) => ({ label: LAND_STATUS[m.status as LandStatus] ?? m.status, value: Number(m.n) }))} /></div>
+        <div className="panel"><div className="panel-head"><h2>Áreas cadastradas por situação</h2></div><HBars data={d.by_status.map((m: any) => ({ label: LAND_STATUS[m.status as LandStatus] ?? m.status, value: Number(m.n) }))} /></div>
       </div>
     </>
   );

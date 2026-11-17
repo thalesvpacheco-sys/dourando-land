@@ -23,6 +23,34 @@ router.get('/me', ah(async (req, res) => {
   res.json({ user: req.user, org, permissions: MATRIX[req.user!.role] });
 }));
 
+// ------------------------------------------------------------------ minha conta (dados do próprio usuário)
+
+async function ownProfile(userId: string) {
+  const u = await db('users').where({ id: userId }).select('id', 'name', 'email', 'phone', 'role').first();
+  const b = await db('land_brokers').where({ user_id: userId }).select('id', 'creci', 'creci_uf', 'creci_status', 'creci_checked_at', 'whatsapp', 'active').first();
+  return { ...u, broker: b ?? null };
+}
+
+router.get('/me/profile', ah(async (req, res) => {
+  res.json(await ownProfile(req.user!.id));
+}));
+
+/** A própria pessoa edita nome, telefone, CRECI e WhatsApp. A situação do CRECI só o administrador valida. */
+router.patch('/me/profile', ah(async (req, res) => {
+  const b = parse(z.object({
+    name: z.string().trim().min(2).max(160).optional(), phone: z.string().trim().max(20).nullable().optional(),
+    creci: z.string().trim().max(20).nullable().optional(), creci_uf: z.string().length(2).nullable().optional(), whatsapp: z.string().trim().max(20).nullable().optional(),
+  }), req.body);
+  await db.transaction(async (trx) => {
+    const userUpd = Object.fromEntries(Object.entries({ name: b.name, phone: b.phone }).filter(([, v]) => v !== undefined));
+    if (Object.keys(userUpd).length) await trx('users').where({ id: req.user!.id }).update({ ...userUpd, updated_at: trx.fn.now() });
+    const broker = await trx('land_brokers').where({ user_id: req.user!.id }).first();
+    if (broker) await trx('land_brokers').where({ id: broker.id }).update(brokerUpdate(broker, { creci: b.creci, creci_uf: b.creci_uf, whatsapp: b.whatsapp }, false));
+  });
+  await audit(req, 'user.profile', 'users', req.user!.id, b);
+  res.json(await ownProfile(req.user!.id));
+}));
+
 // ------------------------------------------------------------------ usuários e intermediadores
 
 router.get('/users', ah(async (req, res) => {
@@ -57,11 +85,36 @@ async function assertNotLastAdmin(u: any) {
   if (!Number(others?.n)) throw badRequest('Este é o último administrador ativo. Cadastre outro antes de alterar este acesso.');
 }
 
+/**
+ * Perfis da equipe que podem ser responsáveis por áreas. O intermediador sempre é; administrador e gestor de captação
+ * passam a ser quando marcados como "atua como intermediador" (ganham uma linha em land_brokers, com CRECI e WhatsApp).
+ */
+const BROKER_CAPABLE = ['dourado_admin', 'capture_manager', 'broker'];
+
+const CRECI_STATUS = ['nao_verificado', 'ativo', 'irregular', 'nao_aplicavel'] as const;
+const brokerFieldsSchema = {
+  creci: z.string().trim().max(20).nullable().optional(), creci_uf: z.string().length(2).nullable().optional(),
+  creci_status: z.enum(CRECI_STATUS).optional(), whatsapp: z.string().trim().max(20).nullable().optional(),
+};
+type BrokerFields = { creci?: string | null; creci_uf?: string | null; creci_status?: (typeof CRECI_STATUS)[number]; whatsapp?: string | null };
+
+/** Monta a alteração de land_brokers. Mudou o número ou a UF do CRECI sem nova validação: volta para "não verificado". */
+function brokerUpdate(cur: any | null, f: BrokerFields, canValidate: boolean) {
+  const upd: any = {};
+  for (const k of ['creci', 'creci_uf', 'whatsapp'] as const) if (f[k] !== undefined) upd[k] = f[k] || null;
+  if (canValidate && f.creci_status) { upd.creci_status = f.creci_status; upd.creci_checked_at = db.fn.now(); }
+  else if (cur && ((upd.creci !== undefined && upd.creci !== cur.creci) || (upd.creci_uf !== undefined && upd.creci_uf !== cur.creci_uf))) upd.creci_status = 'nao_verificado';
+  if (Object.keys(upd).length) upd.updated_at = db.fn.now();
+  return upd;
+}
+
 const inviteSchema = z.object({
   name: z.string().min(2).max(160), email: z.string().email().max(200), phone: z.string().max(20).nullable().optional(),
   role: z.enum(Object.keys(ROLES) as [string, ...string[]]),
   partner_company_id: z.string().uuid().optional(),   // comprador: empresa parceira
   opportunity_code: z.string().max(30).optional(),    // proprietário: área dele
+  acts_as_broker: z.boolean().optional(),             // administrador/gestor que também atende áreas
+  ...brokerFieldsSchema,
 });
 
 router.post('/users', ah(async (req, res) => {
@@ -88,7 +141,9 @@ router.post('/users', ah(async (req, res) => {
       : null;
     if (b.role === 'owner' && !opp) throw badRequest('Informe o código de uma área existente (ex.: DOU-GO-0001) para o proprietário.');
     const [u] = await trx('users').insert({ org_id: orgId, external_id: `local_${crypto.randomUUID()}`, name: b.name.trim(), email, phone: b.phone ?? null, role: b.role }).returning('*');
-    if (b.role === 'broker') await trx('land_brokers').insert({ org_id: orgId, user_id: u.id, whatsapp: b.phone ?? null });
+    if (b.role === 'broker' || (b.acts_as_broker && BROKER_CAPABLE.includes(b.role))) {
+      await trx('land_brokers').insert({ org_id: orgId, user_id: u.id, whatsapp: b.phone ?? null, ...brokerUpdate(null, { creci: b.creci, creci_uf: b.creci_uf, creci_status: b.creci_status, whatsapp: b.whatsapp ?? b.phone }, true) });
+    }
     if (opp) {
       const n = await trx('land_owners').where({ opportunity_id: opp.id }).whereRaw('lower(email) = ?', [email]).update({ user_id: u.id });
       if (!n) await trx('land_owners').insert({ opportunity_id: opp.id, kind: 'pf', name: b.name.trim(), email, phone: b.phone ?? null, user_id: u.id });
@@ -102,8 +157,19 @@ router.post('/users', ah(async (req, res) => {
 
 router.patch('/users/:id', ah(async (req, res) => {
   const scope = requireScope(req, 'user', 'update');
-  const b = parse(z.object({ name: z.string().min(2).max(160).optional(), phone: z.string().max(20).nullable().optional(), role: z.enum(Object.keys(ROLES) as [string, ...string[]]).optional(), active: z.boolean().optional() }), req.body);
+  const { acts_as_broker: actsAsBroker, creci, creci_uf, creci_status, whatsapp, ...b } = parse(z.object({
+    name: z.string().min(2).max(160).optional(), phone: z.string().max(20).nullable().optional(), role: z.enum(Object.keys(ROLES) as [string, ...string[]]).optional(), active: z.boolean().optional(),
+    email: z.string().trim().toLowerCase().email().max(200).optional(),
+    acts_as_broker: z.boolean().optional(), ...brokerFieldsSchema,
+  }), req.body);
   const u = await targetUser(req, scope);
+  // E-mail digitado errado no convite: corrige enquanto a pessoa não definiu senha (depois, o e-mail é o login dela).
+  const emailChanged = b.email !== undefined && b.email !== String(u.email).toLowerCase();
+  if (!emailChanged) delete b.email;
+  else {
+    if (u.password_hash) throw badRequest('Só dá para corrigir o e-mail enquanto o convite está pendente.');
+    if (await db('users').whereRaw('lower(email) = ?', [b.email!]).whereNot({ id: u.id }).first()) throw new HttpError(409, 'Já existe um usuário com este e-mail.');
+  }
   if (!ASSIGNABLE[req.user!.role]?.includes(u.role)) throw forbidden('Seu perfil não pode alterar este usuário');
   if (b.role) {
     assertAssignable(req, b.role);
@@ -114,14 +180,26 @@ router.patch('/users/:id', ah(async (req, res) => {
   const upd: any = { ...b, updated_at: db.fn.now() };
   // perfil ou situação mudaram: as sessões abertas deixam de valer
   if (b.active === false || (b.role && b.role !== u.role)) upd.session_version = u.session_version + 1;
+  const role = b.role ?? u.role;
+  const active = b.active ?? u.active;
   await db.transaction(async (trx) => {
     await trx('users').where({ id: u.id }).update(upd);
-    if (b.role === 'broker' && !(await trx('land_brokers').where({ user_id: u.id }).first())) await trx('land_brokers').insert({ org_id: u.org_id, user_id: u.id, whatsapp: b.phone ?? u.phone });
-    if (b.active === false || (b.role && b.role !== 'broker')) await trx('land_brokers').where({ user_id: u.id }).update({ active: false });
-    if (b.active === true && u.role === 'broker') await trx('land_brokers').where({ user_id: u.id }).update({ active: true });
-    if (b.active === false) await trx('auth_tokens').where({ user_id: u.id }).whereNull('used_at').update({ used_at: trx.fn.now() });
+    const broker = await trx('land_brokers').where({ user_id: u.id }).first();
+    const fields = brokerUpdate(broker, { creci, creci_uf, creci_status, whatsapp }, true);
+    // Só mexe em "pode ser responsável" quando perfil, situação ou a própria opção mudaram:
+    // editar só o nome não reativa quem foi tirado do atendimento em Atendimento e WhatsApp.
+    const touchesRole = b.active !== undefined || b.role !== undefined || actsAsBroker !== undefined;
+    const wantsBroker = active && (role === 'broker' || (BROKER_CAPABLE.includes(role) && (actsAsBroker ?? !!broker?.active)));
+    if (!broker) {
+      if (touchesRole && wantsBroker) await trx('land_brokers').insert({ org_id: u.org_id, user_id: u.id, whatsapp: b.phone ?? u.phone, ...fields });
+    } else {
+      const brokerUpd = { ...fields, ...(touchesRole && broker.active !== wantsBroker ? { active: wantsBroker, updated_at: trx.fn.now() } : {}) };
+      if (Object.keys(brokerUpd).length) await trx('land_brokers').where({ id: broker.id }).update(brokerUpd);
+    }
+    // desativado, ou e-mail corrigido (o link antigo foi para o endereço errado): links pendentes deixam de valer
+    if (b.active === false || emailChanged) await trx('auth_tokens').where({ user_id: u.id }).whereNull('used_at').update({ used_at: trx.fn.now() });
   });
-  await audit(req, 'user.update', 'users', u.id, b);
+  await audit(req, 'user.update', 'users', u.id, { ...b, acts_as_broker: actsAsBroker, creci, creci_uf, creci_status, whatsapp });
   res.json({ ok: true });
 }));
 
@@ -152,7 +230,7 @@ router.post('/users/:id/reset-mfa', ah(async (req, res) => {
 router.get('/brokers', ah(async (req, res) => {
   requireScope(req, 'opportunity', 'read');
   const rows = await db('land_brokers as b').join('users as u', 'u.id', 'b.user_id').where('b.org_id', req.user!.orgId)
-    .select('b.*', 'u.name', 'u.email',
+    .select('b.*', 'u.name', 'u.email', 'u.role', 'u.active as user_active',
       db.raw(`(SELECT count(*)::int FROM broker_assignments ba WHERE ba.broker_id = b.id AND ba.active) as assignments`),
       db.raw(`(SELECT count(*)::int FROM opportunity_interests i WHERE i.broker_id = b.id AND i.created_at > now() - interval '30 days') as interests_30d`))
     .orderBy('u.name');
@@ -161,11 +239,7 @@ router.get('/brokers', ah(async (req, res) => {
 
 router.patch('/brokers/:id', ah(async (req, res) => {
   requireScope(req, 'routing', 'update');
-  const b = parse(z.object({
-    creci: z.string().max(20).nullable().optional(), creci_uf: z.string().length(2).nullable().optional(),
-    creci_status: z.enum(['nao_verificado', 'ativo', 'irregular', 'nao_aplicavel']).optional(),
-    whatsapp: z.string().max(20).nullable().optional(), active: z.boolean().optional(),
-  }), req.body);
+  const b = parse(z.object({ ...brokerFieldsSchema, active: z.boolean().optional() }), req.body);
   const upd: any = { ...b, updated_at: db.fn.now() };
   if (b.creci_status) upd.creci_checked_at = db.fn.now();
   const n = await db('land_brokers').where({ id: String(req.params.id), org_id: req.user!.orgId }).update(upd);
@@ -250,7 +324,8 @@ router.get('/integrations/status', ah(async (req, res) => {
       { key: 'whatsapp_link', name: 'WhatsApp — link contextual', status: 'implemented', detail: 'wa.me com mensagem e token de referência' },
       { key: 'whatsapp_webhook', name: 'WhatsApp Business Platform — webhook', status: config.waAppSecret === 'dev-app-secret' ? 'pending' : 'implemented', detail: 'Endpoint /webhooks/whatsapp pronto; requer app e número oficiais da Dourado' },
       { key: 'postgis', name: 'PostGIS', status: 'implemented', detail: 'Área/perímetro geodésicos, ponto público ofuscado, filtro por região' },
-      { key: 'maps', name: 'Mapa de satélite', status: process.env.VITE_SATELLITE_TILES ? 'implemented' : 'pending', detail: process.env.VITE_SATELLITE_TILES ? 'Provedor configurado' : 'Contratar provedor licenciado e preencher VITE_SATELLITE_TILES. Até lá, o mapa usa a base própria (contornos de UF).' },
+      { key: 'maps', name: 'Mapa de satélite', status: process.env.VITE_SATELLITE_TILES || process.env.MAPBOX_TOKEN ? 'implemented' : 'pending', detail: process.env.VITE_SATELLITE_TILES ? 'Provedor configurado' : process.env.MAPBOX_TOKEN ? `Mapbox Satellite pelo servidor (token protegido, teto de ${Number(process.env.MAPBOX_DAILY_LIMIT ?? 6000).toLocaleString('pt-BR')} blocos/dia)` : 'Criar conta na Mapbox e preencher MAPBOX_TOKEN. Até lá, o mapa usa a base própria (contornos de UF).' },
+      { key: 'terrain3d', name: 'Relevo 3D nos mapas', status: 'implemented', detail: 'Botão 2D/3D em todos os mapas, com modelo de elevação aberto (AWS Terrain Tiles), sem custo' },
       { key: 'storage', name: 'Storage S3', status: 'pending', detail: `Driver local em ${config.storageDir}` },
       { key: 'ai', name: 'IA assistiva', status: config.anthropicKey ? 'implemented' : 'simulated', detail: config.anthropicKey ? `Anthropic ${config.anthropicModel}` : 'Heurísticas determinísticas (sem ANTHROPIC_API_KEY)' },
       { key: 'ga4', name: 'Google Analytics 4 / Meta CAPI', status: 'pending', detail: 'Eventos enviados ao dataLayer com consentimento; tags não configuradas' },

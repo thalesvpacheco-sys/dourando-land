@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api, track } from '../lib/api';
 import { Field } from '../components/ui';
-import { CENTRAL_WA } from './Layout';
+import { useMeta } from './Filters';
 
 function Page({ title, lede, children }: { title: string; lede?: string; children: ReactNode }) {
   useEffect(() => { document.title = `${title} — Dourado Land Intelligence`; }, [title]);
@@ -102,10 +102,11 @@ export function About() {
 }
 
 export function Contact() {
+  // Número central configurado no painel (Atendimento e WhatsApp). Sem número, fica só o formulário.
+  const wa = useMeta()?.central_whatsapp;
   return (
     <Page title="Contato" lede="Fale com a equipe Dourado sobre uma área específica, uma parceria ou o seu perfil de aquisição.">
-      <p><a className="btn gold" href={`https://wa.me/${CENTRAL_WA}?text=${encodeURIComponent('Olá! Vim pelo site da Dourado e gostaria de falar com a equipe.')}`} target="_blank" rel="noopener noreferrer" onClick={() => track('contact', { method: 'whatsapp_central' })}>Conversar pelo WhatsApp</a></p>
-      <p className="small muted">Número central de demonstração. Configure o número oficial no painel, em Atendimento e WhatsApp.</p>
+      {wa && <p><a className="btn gold" href={`https://wa.me/${wa}?text=${encodeURIComponent('Olá! Vim pelo site da Dourado e gostaria de falar com a equipe.')}`} target="_blank" rel="noopener noreferrer" onClick={() => track('contact', { method: 'whatsapp_central' })}>Conversar pelo WhatsApp</a></p>}
       <ContactForm kind="contato" submitLabel="Enviar mensagem" extra={['company']} />
     </Page>
   );

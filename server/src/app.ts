@@ -10,6 +10,7 @@ import { authenticate, requireScope, signDevToken } from './auth/auth.js';
 import { ah, errorHandler, notFound, parse } from './lib/http.js';
 import { audit } from './lib/audit.js';
 import { normalizePhone } from './lib/crypto.js';
+import { log, requestLog } from './lib/log.js';
 import { router as opportunities, documentsRouter } from './routes/opportunities.js';
 import { router as publicRouter, filesRouter } from './routes/public.js';
 import { router as interests, webhookRouter } from './routes/interests.js';
@@ -20,12 +21,14 @@ import { router as admin } from './routes/admin.js';
 import { router as ai, publicAiRouter } from './routes/ai.js';
 import { router as prospects, territoryRouter } from './routes/prospects.js';
 import { router as auth } from './routes/auth.js';
+import { router as mapTiles } from './routes/mapTiles.js';
 
 export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
-  const extra = config.cspExtraHosts;
+  // relevo 3D (Terrarium/AWS, aberto); o satélite vem do próprio servidor (/api/map), sem host externo
+  const extra = [...config.cspExtraHosts, 'https://elevation-tiles-prod.s3.amazonaws.com'];
   // Hosts que a Maps JavaScript API usa (lista de liberação recomendada pela Google), só quando a vista 3D tem chave
   const g = config.googleMaps3d ? ['https://*.googleapis.com', 'https://*.gstatic.com', 'https://*.google.com', 'https://*.ggpht.com', 'https://*.googleusercontent.com'] : [];
   app.use(helmet({
@@ -68,6 +71,18 @@ export function createApp() {
   app.use('/media', express.static(path.join(config.storageDir, 'media'), { maxAge: '7d', immutable: true, fallthrough: true, dotfiles: 'deny' }));
 
   app.use('/media', (_req, res) => res.status(404).end());
+  app.use('/api', requestLog);
+
+  // Erros do navegador (tela quebrada, falha de JavaScript): sem isso só o usuário vê.
+  const clientErrLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false });
+  app.post('/api/client-error', clientErrLimiter, express.json({ limit: '16kb' }), (req, res) => {
+    const b = req.body ?? {};
+    const s = (v: unknown, n: number) => (typeof v === 'string' ? v.slice(0, n) : undefined);
+    log('warn', 'client_error', { error: s(b.message, 500), page: s(b.page, 300), kind: s(b.kind, 40), stack: s(b.stack, 1500), version: s(b.version, 40), ua: s(req.headers['user-agent'], 200) });
+    res.status(204).end();
+  });
+
+  app.use('/api/map', mapTiles);
   app.use('/api/public', publicRouter);
   app.use('/api/public/ai', publicAiRouter);
   app.use('/api/files', filesRouter);
@@ -121,7 +136,10 @@ export function createApp() {
   if (config.webDist) {
     const dist = config.webDist;
     app.use(express.static(dist, { index: false, maxAge: '1h', setHeaders: (res, p) => { if (p.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); } }));
-    app.get(/.*/, (_req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(dist, 'index.html')));
+    // Arquivo de build que não existe mais (aba aberta antes de um deploy): 404 de verdade.
+    // Devolver o index.html aqui faz o navegador receber HTML no lugar de JavaScript e o painel quebra.
+    app.use('/assets', (_req, res) => { res.status(404).set('Cache-Control', 'no-store').type('text/plain').send('Arquivo não encontrado'); });
+    app.get(/.*/,(_req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(dist, 'index.html')));
   }
   app.use(errorHandler);
   return app;

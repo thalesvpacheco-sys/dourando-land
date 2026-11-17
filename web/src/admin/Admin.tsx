@@ -51,15 +51,15 @@ export function Routing() {
         <table className="data"><thead><tr><th>Nome</th><th>CRECI</th><th>Situação</th><th>WhatsApp</th><th className="r">Áreas</th><th className="r">Interesses (30 dias)</th><th /></tr></thead>
           <tbody>{brokers.data?.items.map((b: any) => (
             <tr key={b.id}>
-              <td><b>{b.name}</b><div className="small muted">{b.email}</div></td>
+              <td><b>{b.name}</b>{b.role && b.role !== 'broker' && <span className="badge" style={{ marginLeft: 6 }}>{ROLES[b.role as Role]}</span>}<div className="small muted">{b.email}</div></td>
               <td>{b.creci ? `${b.creci}-${b.creci_uf}` : '—'}</td>
-              <td><span className={`badge ${b.creci_status === 'ativo' ? 'ok' : b.creci_status === 'irregular' ? 'bad' : 'warn'}`}>{({ ativo: 'CRECI ativo', irregular: 'Irregular', nao_verificado: 'Não verificado', nao_aplicavel: 'Não se aplica' } as any)[b.creci_status]}</span>{b.creci_checked_at && <div className="small muted">verificado em {new Date(b.creci_checked_at).toLocaleDateString('pt-BR')}</div>}</td>
+              <td><span className={`badge ${CRECI_STATUS[b.creci_status]?.[0] ?? 'warn'}`}>{CRECI_STATUS[b.creci_status]?.[1]}</span>{b.creci_checked_at && <div className="small muted">verificado em {new Date(b.creci_checked_at).toLocaleDateString('pt-BR')}</div>}</td>
               <td className="num">{b.whatsapp ?? <span className="badge bad">Sem número</span>}</td>
               <td className="r">{b.assignments}</td><td className="r">{b.interests_30d}</td>
               <td>{can('routing', 'update') && <button className="btn link small" onClick={() => setBrokerEdit(b)}>Editar</button>}</td>
             </tr>
           ))}</tbody></table>
-        <p className="small muted" style={{ marginTop: '0.6rem' }}>A situação do CRECI é registrada manualmente após consulta ao conselho regional. A consulta automática depende de convênio.</p>
+        <p className="small muted" style={{ marginTop: '0.6rem' }}>A situação do CRECI é registrada manualmente após consulta ao conselho regional. A consulta automática depende de convênio. Administradores e gestores aparecem aqui quando marcados como "atua como intermediador" em <Link to="/painel/usuarios">Usuários</Link>.</p>
       </div>
       {edit && <RuleModal rule={edit} brokers={brokers.data?.items ?? []} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); rules.reload(); }} />}
       {brokerEdit && <BrokerModal b={brokerEdit} onClose={() => setBrokerEdit(null)} onSaved={() => { setBrokerEdit(null); brokers.reload(); }} />}
@@ -97,9 +97,7 @@ function BrokerModal({ b, onClose, onSaved }: { b: any; onClose: () => void; onS
   return (
     <Modal title={b.name} onClose={onClose}>
       <form className="stack" onSubmit={async (e) => { e.preventDefault(); await api(`/api/admin/brokers/${b.id}`, { method: 'PATCH', body: { ...f, creci_uf: f.creci_uf || null } }); onSaved(); }}>
-        <div className="grid3"><Field label="CRECI"><input value={f.creci} onChange={(e) => setF({ ...f, creci: e.target.value })} /></Field><Field label="UF"><select value={f.creci_uf} onChange={(e) => setF({ ...f, creci_uf: e.target.value })}><option value="" />{UFS.map((u) => <option key={u}>{u}</option>)}</select></Field>
-          <Field label="Situação"><select value={f.creci_status} onChange={(e) => setF({ ...f, creci_status: e.target.value })}><option value="nao_verificado">Não verificado</option><option value="ativo">Ativo</option><option value="irregular">Irregular</option><option value="nao_aplicavel">Não se aplica</option></select></Field></div>
-        <Field label="WhatsApp (DDD + número)"><input value={f.whatsapp} onChange={(e) => setF({ ...f, whatsapp: e.target.value })} /></Field>
+        <CreciFields f={f} setF={setF} validate />
         <label className="check"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Recebe novos interesses</label>
         <div className="row"><button className="btn">Salvar</button><button type="button" className="btn ghost" onClick={onClose}>Cancelar</button></div>
       </form>
@@ -107,10 +105,29 @@ function BrokerModal({ b, onClose, onSaved }: { b: any; onClose: () => void; onS
   );
 }
 
+const CRECI_STATUS: Record<string, [string, string]> = { ativo: ['ok', 'CRECI ativo'], irregular: ['bad', 'Irregular'], nao_verificado: ['warn', 'Não verificado'], nao_aplicavel: ['', 'Não se aplica'] };
+
+/** CRECI, UF, situação e WhatsApp: usados no cadastro do usuário, em Atendimento e em Minha conta. Só o administrador marca a situação. */
+function CreciFields({ f, setF, validate }: { f: any; setF: (v: any) => void; validate?: boolean }) {
+  return (
+    <>
+      <div className={validate ? 'grid3' : 'grid2'}>
+        <Field label="CRECI"><input value={f.creci ?? ''} onChange={(e) => setF({ ...f, creci: e.target.value })} /></Field>
+        <Field label="UF do CRECI"><select value={f.creci_uf ?? ''} onChange={(e) => setF({ ...f, creci_uf: e.target.value })}><option value="" />{UFS.map((u) => <option key={u}>{u}</option>)}</select></Field>
+        {validate && <Field label="Situação" hint="Marque após consultar o conselho regional."><select value={f.creci_status ?? 'nao_verificado'} onChange={(e) => setF({ ...f, creci_status: e.target.value })}>{Object.entries(CRECI_STATUS).map(([k, [, l]]) => <option key={k} value={k}>{k === 'ativo' ? 'Ativo' : l}</option>)}</select></Field>}
+      </div>
+      <Field label="WhatsApp para atendimento (DDD + número)" hint="Para onde vão os interessados das áreas sob sua responsabilidade."><input value={f.whatsapp ?? ''} onChange={(e) => setF({ ...f, whatsapp: e.target.value })} /></Field>
+    </>
+  );
+}
+const creciBody = (f: any, validate: boolean) => ({ creci: f.creci || null, creci_uf: f.creci_uf || null, whatsapp: f.whatsapp || null, ...(validate ? { creci_status: f.creci_status } : {}) });
+
 // ------------------------------------------------------------------ usuários, auditoria, integrações
 
 const MFA_ROLES = ['platform_admin', 'dourado_admin', 'capture_manager'];
 const STAFF_ROLES = ['dourado_admin', 'capture_manager', 'broker'];
+/** Perfis que podem, além do próprio papel, ser responsáveis por áreas. */
+const CAN_ACT_AS_BROKER = ['dourado_admin', 'capture_manager'];
 
 function userStatus(u: any): [string, string] {
   if (!u.active) return ['', 'Desativado'];
@@ -139,15 +156,20 @@ function LinkModal({ link, onClose }: { link: { title: string; url: string; expi
 
 function InviteModal({ roles, onClose, onDone }: { roles: string[]; onClose: () => void; onDone: (r: any) => void }) {
   const mfaOn = !!useSession().me?.mfaRequired;
-  const [f, setF] = useState({ name: '', email: '', phone: '', role: 'broker', partner_company_id: '', opportunity_code: '' });
+  const [f, setF] = useState<any>({ name: '', email: '', phone: '', role: 'broker', partner_company_id: '', opportunity_code: '', acts_as_broker: false, creci: '', creci_uf: '', creci_status: 'nao_verificado', whatsapp: '' });
   const [partners, setPartners] = useState<any[]>([]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => { api('/api/partners').then((r) => setPartners(r.items ?? [])).catch(() => {}); }, []);
+  const isBroker = f.role === 'broker' || (CAN_ACT_AS_BROKER.includes(f.role) && f.acts_as_broker);
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setErr('');
     try {
-      onDone(await api('/api/admin/users', { body: { name: f.name, email: f.email, phone: f.phone || null, role: f.role, partner_company_id: f.role === 'buyer' ? f.partner_company_id || undefined : undefined, opportunity_code: f.role === 'owner' ? f.opportunity_code : undefined } }));
+      onDone(await api('/api/admin/users', { body: {
+        name: f.name, email: f.email, phone: f.whatsapp || f.phone || null, role: f.role,
+        partner_company_id: f.role === 'buyer' ? f.partner_company_id || undefined : undefined, opportunity_code: f.role === 'owner' ? f.opportunity_code : undefined,
+        ...(isBroker ? { acts_as_broker: true, ...creciBody(f, true) } : {}),
+      } }));
     } catch (x: any) { setErr(x.message); setBusy(false); }
   };
   return (
@@ -156,7 +178,8 @@ function InviteModal({ roles, onClose, onDone }: { roles: string[]; onClose: () 
         <Field label="Nome"><input required minLength={2} autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
         <Field label="E-mail"><input type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
         <Field label="Perfil"><select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>{roles.map((r) => <option key={r} value={r}>{ROLES[r as Role]}</option>)}</select></Field>
-        {f.role === 'broker' && <Field label="WhatsApp (DDD + número)"><input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>}
+        {CAN_ACT_AS_BROKER.includes(f.role) && <label className="check"><input type="checkbox" checked={f.acts_as_broker} onChange={(e) => setF({ ...f, acts_as_broker: e.target.checked })} /> Também atua como intermediador (pode ser responsável por áreas)</label>}
+        {isBroker && <CreciFields f={f} setF={setF} validate />}
         {f.role === 'buyer' && <Field label="Empresa parceira"><select required value={f.partner_company_id} onChange={(e) => setF({ ...f, partner_company_id: e.target.value })}><option value="">Selecione</option>{partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>}
         {f.role === 'owner' && <Field label="Código da área" hint="O proprietário verá só esta área e poderá enviar documentos."><input required placeholder="DOU-GO-0001" value={f.opportunity_code} onChange={(e) => setF({ ...f, opportunity_code: e.target.value })} /></Field>}
         {mfaOn && MFA_ROLES.includes(f.role) && <p className="small muted" style={{ margin: 0 }}>Este perfil precisa ativar a verificação em duas etapas no primeiro acesso.</p>}
@@ -170,21 +193,45 @@ function InviteModal({ roles, onClose, onDone }: { roles: string[]; onClose: () 
 function EditUserModal({ u, roles, onClose, onDone, onLink }: { u: any; roles: string[]; onClose: () => void; onDone: () => void; onLink: (l: any) => void }) {
   const { me } = useSession();
   const toast = useToast();
-  const [f, setF] = useState({ name: u.name, role: u.role });
+  const actsNow = !!u.broker_id && u.broker_active !== false;
+  const [f, setF] = useState<any>({ name: u.name, email: u.email, role: u.role, acts_as_broker: actsNow, creci: u.creci ?? '', creci_uf: u.creci_uf ?? '', creci_status: u.creci_status ?? 'nao_verificado', whatsapp: u.whatsapp ?? u.phone ?? '' });
   const [err, setErr] = useState('');
   const self = u.id === me?.user.id;
   const external = ['owner', 'buyer'].includes(u.role);
+  const isBroker = f.role === 'broker' || (CAN_ACT_AS_BROKER.includes(f.role) && f.acts_as_broker);
   const act = async (fn: () => Promise<void>) => { setErr(''); try { await fn(); } catch (x: any) { setErr(x.message); } };
+  const save = () => act(async () => {
+    const emailChanged = !u.has_password && f.email.trim().toLowerCase() !== u.email.toLowerCase();
+    await api(`/api/admin/users/${u.id}`, { method: 'PATCH', body: {
+      name: f.name, ...(f.role !== u.role ? { role: f.role } : {}), ...(emailChanged ? { email: f.email } : {}),
+      // a opção só vale para administrador e gestor; o intermediador sempre pode ser responsável
+      ...(CAN_ACT_AS_BROKER.includes(f.role) && (f.acts_as_broker !== actsNow || f.role !== u.role) ? { acts_as_broker: f.acts_as_broker } : {}),
+      ...(isBroker ? creciBody(f, f.creci_status !== (u.creci_status ?? 'nao_verificado')) : {}),
+    } });
+    if (emailChanged) {
+      // o convite antigo foi para o endereço errado: gera o novo link já para o e-mail corrigido
+      const r = await api(`/api/admin/users/${u.id}/link`, { method: 'POST' });
+      onLink({ title: 'E-mail corrigido — novo link de convite', ...r });
+      return;
+    }
+    toast('Usuário atualizado'); onDone();
+  });
   return (
     <Modal title={u.name} onClose={onClose}>
       <div className="stack">
         <p className="small muted" style={{ margin: 0 }}>{u.email}{u.last_login_at ? ` · último acesso em ${new Date(u.last_login_at).toLocaleString('pt-BR')}` : ' · nunca acessou'}</p>
         <Field label="Nome"><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        {!u.has_password && <Field label="E-mail" hint="Convite pendente: dá para corrigir o e-mail. Ao salvar, o link antigo deixa de valer e um novo é gerado."><input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>}
         <Field label="Perfil" hint={self ? 'Você não pode alterar o próprio perfil.' : external ? 'Proprietário e comprador têm vínculo próprio: para trocar, desative e convide de novo.' : 'Alterar o perfil encerra as sessões abertas.'}>
           <select disabled={self || external} value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>{(external ? [u.role] : roles.filter((r) => STAFF_ROLES.includes(r))).map((r) => <option key={r} value={r}>{ROLES[r as Role]}</option>)}</select>
         </Field>
+        {!external && CAN_ACT_AS_BROKER.includes(f.role) && <label className="check"><input type="checkbox" checked={f.acts_as_broker} onChange={(e) => setF({ ...f, acts_as_broker: e.target.checked })} /> Também atua como intermediador (pode ser responsável por áreas)</label>}
+        {!external && isBroker && <fieldset className="stack-s" style={{ border: '1px solid var(--line-2)', borderRadius: 6, padding: '0.6rem 0.8rem', margin: 0 }}>
+          <legend className="small" style={{ padding: '0 4px' }}>Intermediação</legend>
+          <CreciFields f={f} setF={setF} validate />
+        </fieldset>}
         {err && <p className="error-text">{err}</p>}
-        <div className="row"><button className="btn" onClick={() => act(async () => { await api(`/api/admin/users/${u.id}`, { method: 'PATCH', body: { name: f.name, ...(f.role !== u.role ? { role: f.role } : {}) } }); toast('Usuário atualizado'); onDone(); })}>Salvar</button></div>
+        <div className="row"><button className="btn" onClick={save}>Salvar</button></div>
         <div className="stack-s" style={{ borderTop: '1px solid var(--line-2)', paddingTop: '0.8rem' }}>
           {u.active && <button className="btn ghost small" onClick={() => act(async () => { const r = await api(`/api/admin/users/${u.id}/link`, { method: 'POST' }); onLink({ title: r.kind === 'invite' ? 'Novo link de convite' : 'Link para redefinir a senha', ...r }); })}>{u.has_password ? 'Gerar link para redefinir a senha' : 'Gerar novo link de convite'}</button>}
           {me?.mfaRequired && u.mfa_enabled && !self && <button className="btn ghost small" onClick={() => act(async () => { await api(`/api/admin/users/${u.id}/reset-mfa`, { method: 'POST' }); toast('Verificação em duas etapas zerada. A pessoa configura de novo no próximo acesso.'); onDone(); })}>Zerar duas etapas (celular perdido)</button>}
@@ -214,7 +261,7 @@ export function Users() {
             const [cls, label] = userStatus(u);
             return <tr key={u.id} style={{ opacity: u.active ? 1 : 0.55 }}>
               <td><b>{u.name}</b><div className="small muted">{u.email}</div></td>
-              <td>{ROLES[u.role as Role]}</td>
+              <td>{ROLES[u.role as Role]}{u.role !== 'broker' && u.broker_id && u.broker_active && <div className="small muted">também intermediador</div>}{u.broker_id && u.broker_active && <div className="small muted">{u.creci ? `CRECI ${u.creci}-${u.creci_uf ?? ''}` : 'sem CRECI'} · {CRECI_STATUS[u.creci_status]?.[1]}</div>}</td>
               <td className="small">{u.org_name}</td>
               {mfaOn && <td>{u.mfa_enabled ? <span className="badge ok">Ativa</span> : MFA_ROLES.includes(u.role) ? <span className="badge bad">Obrigatória — pendente</span> : <span className="muted small">Opcional</span>}</td>}
               <td className="small">{u.last_login_at ? new Date(u.last_login_at).toLocaleDateString('pt-BR') : '—'}</td>
@@ -227,6 +274,40 @@ export function Users() {
       {edit && <EditUserModal u={edit} roles={roles} onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }} onLink={(l) => { setEdit(null); setLink(l); }} />}
       {link && <LinkModal link={link} onClose={() => setLink(null)} />}
     </>
+  );
+}
+
+/** Dados pessoais e, para quem atende áreas, CRECI e WhatsApp. Trocar o CRECI volta a situação para "não verificado". */
+function ProfileForm({ onSaved }: { onSaved: () => void }) {
+  const toast = useToast();
+  const { data, loading, reload } = useAsync(() => api('/api/admin/me/profile'), []);
+  const [f, setF] = useState<any>(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (data) setF({ name: data.name, phone: data.phone ?? '', creci: data.broker?.creci ?? '', creci_uf: data.broker?.creci_uf ?? '', whatsapp: data.broker?.whatsapp ?? '' }); }, [data]);
+  if (loading || !f) return <div className="panel"><Loading /></div>;
+  const save = async (e: FormEvent) => {
+    e.preventDefault(); setErr(''); setBusy(true);
+    try {
+      await api('/api/admin/me/profile', { method: 'PATCH', body: { name: f.name, phone: f.phone || null, ...(data.broker ? creciBody(f, false) : {}) } });
+      toast('Dados atualizados'); reload(); onSaved();
+    } catch (x: any) { setErr(x.message); }
+    setBusy(false);
+  };
+  const st = data.broker && CRECI_STATUS[data.broker.creci_status];
+  return (
+    <form className="panel stack" onSubmit={save}>
+      <h2>Meus dados</h2>
+      <p className="small muted" style={{ margin: 0 }}>{data.email} · {ROLES[data.role as Role]}</p>
+      <Field label="Nome"><input required minLength={2} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+      <Field label="Telefone"><input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>
+      {data.broker && <>
+        <CreciFields f={f} setF={setF} />
+        {st && <p className="small" style={{ margin: 0 }}>Situação do CRECI: <span className={`badge ${st[0]}`}>{st[1]}</span>{data.broker.creci_status !== 'ativo' && <span className="muted"> — um administrador valida após consultar o conselho.</span>}</p>}
+      </>}
+      {err && <p className="error-text">{err}</p>}
+      <div><button className="btn" disabled={busy}>Salvar dados</button></div>
+    </form>
   );
 }
 
@@ -251,6 +332,7 @@ export function Account() {
     <>
       <PageHeader title="Minha conta" />
       <div className="grid2">
+        {!DEMO && <ProfileForm onSaved={() => void login()} />}
         <form className="panel stack" onSubmit={change}>
           <h2>Trocar senha</h2>
           <p className="small muted" style={{ margin: 0 }}>{me?.user.email}</p>
@@ -324,7 +406,7 @@ const ACTION_LABEL: Record<string, string> = {
   'privacy.erase': 'Anonimizou titular', version: 'Nova versão de proposta',
   'auth.login': 'Entrou', 'auth.failed': 'Tentativa de login incorreta', 'auth.locked': 'Conta bloqueada por tentativas', 'auth.invite_accepted': 'Aceitou o convite',
   'auth.password_reset': 'Redefiniu a senha', 'auth.password_changed': 'Trocou a senha', 'auth.mfa_enabled': 'Ativou duas etapas', 'auth.mfa_disabled': 'Desativou duas etapas',
-  'auth.recovery_code': 'Usou código de recuperação', 'auth.reset_requested': 'Pediu redefinição de senha', 'user.invite': 'Convidou usuário', 'user.update': 'Alterou usuário',
+  'auth.recovery_code': 'Usou código de recuperação', 'auth.reset_requested': 'Pediu redefinição de senha', 'user.invite': 'Convidou usuário', 'user.update': 'Alterou usuário', 'user.profile': 'Alterou os próprios dados',
   'user.invite_link': 'Gerou link de convite', 'user.reset_link': 'Gerou link de redefinição', 'user.mfa_reset': 'Zerou duas etapas', 'export.dxf': 'Exportou DXF', 'export.kml': 'Exportou KML', 'ai.matricula': 'Leu matrícula por IA',
 };
 

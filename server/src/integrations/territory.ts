@@ -112,10 +112,20 @@ const toFeature = (r: any, loadedAt?: string, sourceName?: string) => ({
   properties: {
     id: Number(r.id), layer: r.layer, codigo: r.code ?? '', nome: r.name, area_ha: r.area_ha, municipio: r.municipio, uf: r.uf, situacao: r.situacao,
     matricula: r.matricula, cns_serventia: r.cns_serventia, data_referencia: r.data_referencia,
+    // natureza (privado/público), código do imóvel no SNCR/INCRA e NIRF/CIB (Receita), quando a base trouxer
+    natureza: r.natureza ?? null, codigo_sncr: r.sncr ?? null,
+    cafir: r.cafir ?? (r.nirf_base ? [{ nirf: r.nirf_base, nome: null, area_ha: null, metodo: 'base' }] : []),
     fonte: `${sourceName ?? TERRITORY_LAYERS[r.layer as TerritoryLayer]?.source ?? r.layer}${loadedAt ? ` — carregada na plataforma em ${new Date(loadedAt).toLocaleDateString('pt-BR')}` : ''}`,
   },
 });
-const FEATURE_COLS = 'id, layer, uf, code, name, area_ha, municipio, situacao, matricula, cns_serventia, data_referencia';
+// NIRF (CAFIR/Receita): ligado pelo código do imóvel no INCRA (SNCR) ou, sem esse vínculo, o provável por nome, município e área.
+// Vem com nome e área do imóvel na Receita para conferir (o código INCRA de um lote pode levar ao assentamento inteiro).
+const EXTRA_COLS = (t = 'territory_features.') => `${t}raw->>'natureza' AS natureza, ${t}raw->>'codigo_imovel_sncr' AS sncr,
+  coalesce(
+    (SELECT json_agg(json_build_object('nirf', c.nirf, 'nome', c.nome, 'area_ha', c.area_ha, 'metodo', 'codigo') ORDER BY c.nirf) FROM cafir_imoveis c WHERE c.sncr = ${t}raw->>'codigo_imovel_sncr'),
+    (SELECT json_agg(json_build_object('nirf', p.nirf, 'nome', p.nome, 'area_ha', p.area_ha, 'metodo', 'provavel')) FROM cafir_provavel p WHERE p.feature_id = ${t}id)
+  ) AS cafir, coalesce(${t}raw->>'nirf', ${t}raw->>'cib') AS nirf_base`;
+const FEATURE_COLS = `id, layer, uf, code, name, area_ha, municipio, situacao, matricula, cns_serventia, data_referencia, ${EXTRA_COLS()}`;
 
 /** Consulta na base local (PostGIS). Retorna null se a camada ainda não foi carregada. */
 async function localFeatures(layer: string, bbox: [number, number, number, number]) {
@@ -317,7 +327,7 @@ export async function radarSearch(f: RadarFilter) {
   if (!ds) return { loaded: false, items: [], source: null };
   const restr = (await db('territory_datasets').whereIn('layer', RESTRICTION_LAYERS).where({ uf: f.uf }).select('layer')).map((r) => r.layer);
   const qb = db('territory_features as t').where({ 't.layer': f.layer, 't.uf': f.uf })
-    .select(db.raw(`t.id, t.layer, t.uf, t.code, t.name, t.area_ha, t.municipio, t.situacao, t.matricula, t.cns_serventia, t.data_referencia`),
+    .select(db.raw(`t.id, t.layer, t.uf, t.code, t.name, t.area_ha, t.municipio, t.situacao, t.matricula, t.cns_serventia, t.data_referencia, ${EXTRA_COLS('t.')}`),
       db.raw('ST_AsGeoJSON(t.geom, 6)::json AS geometry'), db.raw('ST_X(ST_PointOnSurface(t.geom)) lng, ST_Y(ST_PointOnSurface(t.geom)) lat'))
     .whereRaw(`NOT EXISTS (SELECT 1 FROM land_prospects p WHERE p.org_id = ? AND p.geom IS NOT NULL AND p.geom && t.geom AND ST_Intersects(p.geom, t.geom) AND ST_Area(ST_Intersection(p.geom, t.geom)::geography) > 1000)`, [f.orgId])
     .whereRaw(`NOT EXISTS (SELECT 1 FROM land_geometries g JOIN land_opportunities o ON o.id = g.opportunity_id WHERE o.org_id = ? AND g.is_current AND g.geom && t.geom AND ST_Intersects(g.geom, t.geom) AND ST_Area(ST_Intersection(g.geom, t.geom)::geography) > 1000)`, [f.orgId])

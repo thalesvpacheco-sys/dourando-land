@@ -21,7 +21,13 @@ services:
         VITE_SATELLITE_TILES: ${VITE_SATELLITE_TILES:-}
         VITE_SATELLITE_ATTRIBUTION: ${VITE_SATELLITE_ATTRIBUTION:-}
         VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
+        # satélite pela Mapbox via servidor: liga sozinho quando há MAPBOX_TOKEN no .env
+        VITE_SATELLITE_PROXY: ${MAPBOX_TOKEN:+1}
     restart: unless-stopped
+    # log JSON por requisição/erro: guarda até 5 arquivos de 20 MB (ver scripts/ver-erros.sh)
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
     depends_on:
       db: { condition: service_healthy }
     env_file: .env

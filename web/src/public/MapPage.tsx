@@ -24,7 +24,7 @@ export default function MapPage() {
 
   return (
     <div className="map-fullpage">
-      <MapView features={features} onBoundsChange={setBbox} compare={compare} />
+      <MapView features={features} onBoundsChange={setBbox} compare={compare} embedded={false} />
       <aside className="map-side" aria-label="Áreas no mapa">
         <div className="spread">
           <b>{inView.length} {inView.length === 1 ? 'área visível' : 'áreas visíveis'}</b>

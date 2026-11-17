@@ -13,6 +13,7 @@ ARG VITE_MAP_STYLE_URL=
 ARG VITE_SATELLITE_TILES=
 ARG VITE_SATELLITE_ATTRIBUTION=
 ARG VITE_GOOGLE_MAPS_API_KEY=
+ARG VITE_SATELLITE_PROXY=
 RUN npm run build -w web
 ENV NODE_ENV=production WEB_DIST_DIR=/app/web/dist STORAGE_DIR=/data/storage PORT=4200
 # A aplicação roda sem root; o volume de documentos herda o dono na primeira montagem

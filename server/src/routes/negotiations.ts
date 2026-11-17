@@ -308,7 +308,7 @@ router.post('/:id/commissions', ah(async (req, res) => {
   if (b.broker_id) {
     const br = await db('land_brokers').where({ id: b.broker_id, org_id: req.user!.dataOrgId }).first();
     if (!br) throw notFound('Intermediador');
-    if (br.creci_status !== 'ativo' && br.creci_status !== 'nao_aplicavel') throw badRequest('Intermediador sem habilitação profissional validada (CRECI)');
+    if (br.creci_status !== 'ativo' && br.creci_status !== 'nao_aplicavel') throw badRequest('Intermediador sem CRECI validado. Um administrador registra o CRECI e marca a situação como "Ativo" em Usuários → Gerenciar (ou em Atendimento e WhatsApp → Intermediadores).');
   }
   const [c] = await db('commissions').insert({
     ...b, org_id: n.org_id, negotiation_id: n.id, opportunity_id: n.opportunity_id, status: 'prevista',

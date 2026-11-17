@@ -360,6 +360,7 @@ on('GET', '/api/public/meta', ({ u }) => {
     ufs: count((o) => o.uf).sort((a: any, b: any) => a.uf.localeCompare(b.uf)),
     cities: count((o) => `${o.city}|${o.uf}`).sort((a: any, b: any) => a.city.localeCompare(b.city)),
     types: [], totals: { n: l.length, area: l.reduce((s, o) => s + (o.area_m2 ?? 0), 0), cities: new Set(l.map((o) => o.city)).size },
+    central_whatsapp: normalizePhone(T('organizations').find((o) => o.kind === 'manager')?.central_whatsapp) || null,
   };
 });
 function bySlug(u: U | null, slug: string) {

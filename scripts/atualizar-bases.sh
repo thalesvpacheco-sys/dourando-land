@@ -14,6 +14,7 @@ CARGA=carga
 mkdir -p "$CARGA"
 log() { echo "[$(date '+%F %T')] $*"; }
 # </dev/null: sem isso o docker consome a entrada do laço que lê a lista de bases
+recalc() { docker compose exec -T db psql -q -U dourado -d dourado < scripts/cafir-provavel.sql >/dev/null 2>&1 && log "NIRF provável recalculado" || log "NIRF provável não recalculado (CAFIR ainda não carregado?)"; }
 imp() { docker compose exec -T app npx tsx src/integrations/territory-cli.ts "$@" </dev/null 2>&1 | grep -v 'npm notice'; }
 
 log "Bases de serviços oficiais (UFs: $UFS)"
@@ -26,6 +27,7 @@ EOF
 INCRA=https://certificacao.incra.gov.br/csv_shp/zip
 if ! getent hosts certificacao.incra.gov.br >/dev/null; then
   log "INCRA: certificacao.incra.gov.br não resolve no DNS. SIGEF segue com a cópia do IBAMA; SNCI e quilombolas ficam pendentes."
+  recalc
   exit 0
 fi
 baixa() { curl -sfL -m 1800 -A 'Mozilla/5.0' -o "$CARGA/$2" "$INCRA/$(printf '%s' "$1" | sed 's/ /%20/g')" && unzip -tq "$CARGA/$2" >/dev/null 2>&1; }
@@ -41,4 +43,5 @@ for uf in $UFS; do
   baixa "SNCI Brasil_$uf.zip" "incra_snci_$uf.zip" && imp --layer snci --uf "$uf" --file "/carga/incra_snci_$uf.zip" --source "INCRA — Acervo Fundiário (SNCI)" --encoding latin1 || log "INCRA: SNCI de $uf indisponível"
   baixa "Áreas de Quilombolas_$uf.zip" "incra_quilombola_$uf.zip" && imp --layer quilombola --uf "$uf" --file "/carga/incra_quilombola_$uf.zip" --source "INCRA — territórios quilombolas" --encoding latin1 || log "INCRA: quilombolas de $uf indisponível"
 done
+recalc
 log "Concluído"

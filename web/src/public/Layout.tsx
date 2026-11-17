@@ -3,8 +3,6 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Brand } from '../components/ui';
 import { captureAttribution } from '../lib/api';
 
-export const CENTRAL_WA = '5562900000000';
-
 export default function PublicLayout() {
   const [open, setOpen] = useState(false);
   const loc = useLocation();

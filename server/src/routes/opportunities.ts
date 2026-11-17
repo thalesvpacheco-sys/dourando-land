@@ -403,7 +403,8 @@ router.post('/:id/assignments', ah(async (req, res) => {
   requireScope(req, 'routing', 'update');
   const o = await getScopedOpportunity(req, String(req.params.id), 'update');
   const b = parse(z.object({ broker_id: z.string().uuid(), role: z.enum(['primary', 'support']).default('primary'), reason: z.string().max(240).optional() }), req.body);
-  const broker = await db('land_brokers').where({ id: b.broker_id, org_id: req.user!.orgId, active: true }).first();
+  const broker = await db('land_brokers as lb').join('users as u', 'u.id', 'lb.user_id')
+    .where({ 'lb.id': b.broker_id, 'lb.org_id': req.user!.orgId, 'lb.active': true, 'u.active': true }).select('lb.*').first();
   if (!broker) throw notFound('Intermediador');
   await db.transaction(async (trx) => {
     if (b.role === 'primary') {

@@ -125,7 +125,8 @@ describe('Bases carregadas', () => {
     const f = await request(app).get('/api/territory/features').query({ layer: 'sigef', bbox: '-50.2,-15.2,-50,-15' }).set(as('captacao'));
     expect(f.body.features).toHaveLength(3);
     expect(f.body.features[0].properties.ficticio).toBeUndefined();
-    expect(f.body.features[0].properties.fonte).toMatch(/INCRA.*base carregada em/);
+    // a fonte exibida é a da carga (aqui, o arquivo importado), com a data em que entrou na plataforma
+    expect(f.body.features[0].properties.fonte).toMatch(/sigef2\.shp — carregada na plataforma em \d{2}\/\d{2}\/\d{4}/);
     const l = await request(app).get('/api/territory/lookup').query({ lat: -15.09, lng: -50.09, uf: 'GO' }).set(as('captacao'));
     expect(l.body.parcels.find((p: any) => p.properties?.layer === 'sigef').properties.nome).toBe('Fazenda Alfa');
     expect((await request(app).get('/api/territory/features').query({ layer: 'invalida', bbox: '0,0,1,1' }).set(as('captacao'))).status).toBe(400);

@@ -20,12 +20,19 @@ export function parse<T extends ZodTypeAny>(schema: T, data: unknown): z.infer<T
   return schema.parse(data);
 }
 
-export function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction) {
+export function errorHandler(err: any, req: Request, res: Response, _next: NextFunction) {
+  // a mensagem fica em res.locals para o log da requisição (lib/log.ts) mostrar o motivo do erro
   if (err instanceof ZodError) {
-    return res.status(400).json({ error: 'Dados inválidos', details: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) });
+    const details = err.issues.map((i) => ({ path: i.path.join('.'), message: i.message }));
+    res.locals.errorMessage = 'Dados inválidos'; res.locals.errorDetails = details;
+    return res.status(400).json({ error: 'Dados inválidos', details });
   }
-  if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, details: err.details });
-  if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Arquivo excede o limite permitido' });
-  console.error(JSON.stringify({ level: 'error', msg: err?.message, stack: err?.stack }));
+  if (err instanceof HttpError) {
+    res.locals.errorMessage = err.message; res.locals.errorDetails = err.details;
+    return res.status(err.status).json({ error: err.message, details: err.details });
+  }
+  if (err?.code === 'LIMIT_FILE_SIZE') { res.locals.errorMessage = 'Arquivo excede o limite'; return res.status(413).json({ error: 'Arquivo excede o limite permitido' }); }
+  res.locals.errorMessage = err?.message;
+  console.error(JSON.stringify({ t: new Date().toISOString(), level: 'error', msg: 'unhandled_error', path: req.originalUrl.split('?')[0], error: err?.message, stack: err?.stack }));
   res.status(500).json({ error: 'Erro interno' });
 }

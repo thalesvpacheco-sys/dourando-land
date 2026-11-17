@@ -4,6 +4,29 @@ import { BrowserRouter, MemoryRouter, Navigate, Route, Routes, useNavigate } fro
 import { useEffect, type ReactNode } from 'react';
 import { DEMO, FRAMED } from './lib/api';
 import './styles.css';
+
+// Saiu versão nova enquanto a aba estava aberta: as telas antigas não existem mais no servidor.
+// Recarrega uma vez para pegar a versão atual (a marca evita ciclo de recarga se o erro for outro).
+// Erros de tela vão para o log do servidor (docker compose logs app | grep client_error).
+function reportClientError(kind: string, err: any) {
+  if (DEMO) return;
+  try {
+    const body = JSON.stringify({ kind, message: String(err?.message ?? err ?? '').slice(0, 500), stack: String(err?.stack ?? '').slice(0, 1500), page: location.pathname });
+    navigator.sendBeacon?.('/api/client-error', new Blob([body], { type: 'application/json' })) || void fetch('/api/client-error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
+  } catch { /* nunca quebra a tela por causa do log */ }
+}
+window.addEventListener('error', (e) => reportClientError('error', e.error ?? e.message));
+window.addEventListener('unhandledrejection', (e) => reportClientError('promise', e.reason));
+
+window.addEventListener('vite:preloadError', (e) => {
+  try {
+    const last = Number(sessionStorage.getItem('dl_reload_versao') ?? 0);
+    if (Date.now() - last < 60_000) return;
+    sessionStorage.setItem('dl_reload_versao', String(Date.now()));
+  } catch { /* sem sessionStorage: recarrega mesmo assim */ }
+  e.preventDefault();
+  window.location.reload();
+});
 import { SessionProvider, useSession } from './lib/session';
 import { ToastProvider } from './components/ui';
 import PublicLayout from './public/Layout';

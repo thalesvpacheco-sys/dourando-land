@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 
 export type FilterState = Record<string, string>;
 
-export interface Meta { ufs: { uf: string; n: number }[]; cities: { city: string; uf: string; n: number }[]; totals: { n: number; area: number; cities: number } }
+export interface Meta { ufs: { uf: string; n: number }[]; cities: { city: string; uf: string; n: number }[]; totals: { n: number; area: number; cities: number }; central_whatsapp?: string | null }
 
 export function useMeta() {
   const [meta, setMeta] = useState<Meta | null>(null);

@@ -250,7 +250,7 @@ table.data a:hover { text-decoration: underline; }
 .filters legend { font-size: var(--t-1); color: var(--ink-2); font-weight: 560; margin-bottom: 0.4rem; padding: 0; }
 .range { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
 .view-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-s); overflow: hidden; }
-.view-toggle button { border: 0; background: var(--sheet); padding: 0.45rem 0.9rem; cursor: pointer; }
+.view-toggle button { border: 0; background: var(--sheet); color: var(--ink); padding: 0.45rem 0.9rem; cursor: pointer; }
 .view-toggle button[aria-pressed='true'] { background: var(--ink); color: var(--sheet); }
 .filter-btn { display: none; }
 @media (max-width: 980px) {
@@ -324,6 +324,9 @@ dl.spec dd { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap;
 .map-legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: middle; }
 .map-layers { position: absolute; right: 12px; top: 12px; z-index: 2; display: flex; flex-direction: column; gap: 4px; }
 .map-layers .view-toggle button { font-size: 0.8rem; padding: 0.35rem 0.65rem; }
+/* o mapa pode estar dentro de seção escura (hero da home): cartões e controles não herdam o texto claro */
+.maplibregl-map { color: var(--ink); }
+.maplibregl-cooperative-gesture-screen { font-family: var(--font); }
 .maplibregl-popup-content { font-family: var(--font); padding: 0; border-radius: var(--r-m); overflow: hidden; width: 260px; box-shadow: 0 12px 30px #0a0a0a33; }
 .map-card img { aspect-ratio: 14/9; object-fit: cover; width: 100%; }
 .map-card div { padding: 0.7rem 0.85rem 0.85rem; }
@@ -473,6 +476,22 @@ dl.spec dd { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap;
 .map-tools { position: absolute; top: 12px; right: 12px; display: flex; gap: 0.5rem; align-items: center; }
 .map-measure { position: absolute; top: 12px; left: 12px; background: #0a0a0aee; color: #fff; border-radius: var(--r-s); padding: 0.45rem 0.7rem; font-size: 0.85rem; display: flex; gap: 0.6rem; align-items: center; }
 .map-measure .btn.link { color: #f8b817; }
+/* ficha do imóvel sobre o mapa da prospecção */
+.parcel-float { position: absolute; right: 56px; bottom: 16px; z-index: 3; width: min(400px, calc(100% - 80px)); max-height: calc(100% - 90px); overflow: auto; background: var(--sheet); color: var(--ink); border-radius: var(--r-m); border-left: 4px solid var(--gold); box-shadow: 0 14px 36px #0a0a0a40; padding: 0.85rem 1rem 0.75rem; font-size: 0.9rem; }
+.parcel-float .pc-close { position: absolute; top: 6px; right: 8px; border: 0; background: none; font-size: 1.4rem; line-height: 1; cursor: pointer; color: var(--ink-2); padding: 4px; }
+.parcel-float .pc-tag { display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; border: 1.5px solid; border-radius: 999px; padding: 1px 8px; margin-bottom: 4px; }
+.parcel-float .pc-title { display: block; font-size: 1.02rem; margin: 2px 28px 6px 0; }
+.parcel-float .pc-grid { display: grid; gap: 4px; }
+.parcel-float .pc-row { display: grid; grid-template-columns: 9.5rem 1fr; gap: 0.5rem; align-items: baseline; }
+.parcel-float .pc-label { color: var(--ink-2); font-size: 0.82rem; }
+.parcel-float .pc-value { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.parcel-float .pc-copy { border: 0; background: none; cursor: pointer; color: var(--ink-2); font-size: 0.85rem; padding: 0 2px; flex: none; }
+.parcel-float .pc-copy:hover { color: var(--ink); }
+.parcel-float .pc-source { display: block; margin-top: 6px; font-size: 0.72rem; color: var(--ink-2); }
+@media (max-width: 720px) {
+  .parcel-float { left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 60%; }
+  .parcel-float .pc-row { grid-template-columns: 7.5rem 1fr; }
+}
 .seg { display: inline-flex; background: #fff; border: 1px solid var(--line); border-radius: var(--r-s); overflow: hidden; }
 .seg.wide { display: flex; }
 .seg.wide button { flex: 1; }

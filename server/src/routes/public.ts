@@ -112,7 +112,9 @@ router.get('/meta', ah(async (req, res) => {
     base.clone().select('o.type').count({ n: '*' }).groupBy('o.type'),
     base.clone().select(db.raw('count(*)::int as n, coalesce(sum(o.area_m2),0)::float as area, count(distinct o.city)::int as cities')).first(),
   ]);
-  res.json({ ufs, cities, types, totals, labels: { types: LAND_TYPES, modalities: MODALITIES, viability: VIABILITY } });
+  // Número central do atendimento (Atendimento e WhatsApp). Sem número configurado, o portal não mostra o botão.
+  const org = await db('organizations').where({ kind: 'manager' }).orderBy('created_at').select('central_whatsapp').first();
+  res.json({ ufs, cities, types, totals, central_whatsapp: normalizePhone(org?.central_whatsapp) || null, labels: { types: LAND_TYPES, modalities: MODALITIES, viability: VIABILITY } });
 }));
 
 async function findBySlug(req: Request, slug: string) {

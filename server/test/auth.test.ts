@@ -216,6 +216,56 @@ describe('Controle de usuários', () => {
     expect(r.status).toBe(400); expect(r.body.error).toMatch(/último administrador/);
   });
 
+  it('administrador que atua como intermediador pode ser responsável por área; CRECI fica no cadastro do usuário', async () => {
+    const adm = await invite('admin.corretor@dourado.example', 'dourado_admin', { acts_as_broker: true, creci: '12345', creci_uf: 'SP', creci_status: 'ativo', whatsapp: '11988887777' });
+    const row = await db('land_brokers').where({ user_id: adm.id }).first();
+    expect(row).toMatchObject({ active: true, creci: '12345', creci_uf: 'SP', creci_status: 'ativo', whatsapp: '11988887777' });
+    expect(row.creci_checked_at).toBeTruthy();
+    const brokers = (await request(app).get('/api/admin/brokers').set(asAdmin())).body.items;
+    expect(brokers.find((b: any) => b.id === row.id)).toMatchObject({ role: 'dourado_admin' });
+    const opp = await db('land_opportunities').where({ code: 'DOU-GO-0001' }).first();
+    expect((await request(app).post(`/api/opportunities/${opp.id}/assignments`).set(asAdmin()).send({ broker_id: row.id, role: 'primary' })).status).toBe(201);
+
+    // trocar o número do CRECI sem nova validação volta para "não verificado"
+    expect((await request(app).patch(`/api/admin/users/${adm.id}`).set(asAdmin()).send({ creci: '99999' })).status).toBe(200);
+    expect(await db('land_brokers').where({ id: row.id }).first()).toMatchObject({ creci: '99999', creci_status: 'nao_verificado' });
+    // editar só o nome não mexe em quem atende
+    await db('land_brokers').where({ id: row.id }).update({ active: false });
+    expect((await request(app).patch(`/api/admin/users/${adm.id}`).set(asAdmin()).send({ name: 'Admin Corretor' })).status).toBe(200);
+    expect((await db('land_brokers').where({ id: row.id }).first()).active).toBe(false);
+    // desmarcar e marcar de novo
+    expect((await request(app).patch(`/api/admin/users/${adm.id}`).set(asAdmin()).send({ acts_as_broker: true })).status).toBe(200);
+    expect((await db('land_brokers').where({ id: row.id }).first()).active).toBe(true);
+    expect((await request(app).patch(`/api/admin/users/${adm.id}`).set(asAdmin()).send({ acts_as_broker: false })).status).toBe(200);
+    expect((await db('land_brokers').where({ id: row.id }).first()).active).toBe(false);
+    // gestor sem a opção não ganha cadastro de intermediador
+    const gestor = await invite('gestor.sem@dourado.example', 'capture_manager');
+    expect(await db('land_brokers').where({ user_id: gestor.id }).first()).toBeUndefined();
+  });
+
+  it('e-mail errado no convite: corrige enquanto pendente, invalida o link antigo; com senha definida não muda', async () => {
+    const inv = await invite('silvio@gmil.example', 'broker');
+    expect((await request(app).patch(`/api/admin/users/${inv.id}`).set(asAdmin()).send({ email: 'MARINA@dourado.example' })).status).toBe(409);
+    expect((await request(app).patch(`/api/admin/users/${inv.id}`).set(asAdmin()).send({ email: 'Silvio@Gmail.example' })).status).toBe(200);
+    expect((await db('users').where({ id: inv.id }).first()).email).toBe('silvio@gmail.example');
+    expect((await request(app).post('/api/auth/password/set').send({ token: tokenOf(inv.invite_url), password: PW })).status).toBe(400);
+    const l = await request(app).post(`/api/admin/users/${inv.id}/link`).set(asAdmin());
+    expect(l.body.kind).toBe('invite');
+    expect((await request(app).post('/api/auth/password/set').send({ token: tokenOf(l.body.url), password: PW })).status).toBe(200);
+    expect((await request(app).patch(`/api/admin/users/${inv.id}`).set(asAdmin()).send({ email: 'outro@gmail.example' })).status).toBe(400);
+  });
+
+  it('minha conta: a pessoa edita nome, telefone, CRECI e WhatsApp, mas não valida o próprio CRECI', async () => {
+    const id = await activate('minha.conta@dourado.example');
+    await db('land_brokers').where({ user_id: id }).update({ creci: '111', creci_uf: 'GO', creci_status: 'ativo' });
+    const u = await db('users').where({ id }).first();
+    const tok = { Authorization: `Bearer ${signDevToken({ sub: u.external_id, org: u.org_id, role: u.role, name: u.name, email: u.email, sv: u.session_version })}` };
+    const r = await request(app).patch('/api/admin/me/profile').set(tok).send({ name: 'Nome Novo', phone: '62911112222', creci: '222', creci_uf: 'GO', whatsapp: '62933334444', creci_status: 'ativo' });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ name: 'Nome Novo', phone: '62911112222', broker: { creci: '222', creci_status: 'nao_verificado', whatsapp: '62933334444' } });
+    expect((await request(app).get('/api/admin/me/profile').set(tok)).body.name).toBe('Nome Novo');
+  });
+
   it('link de redefinição: gerado pelo admin, expira, e a senha antiga para de valer', async () => {
     const id = await activate('reset@dourado.example');
     const l = await request(app).post(`/api/admin/users/${id}/link`).set(asAdmin());

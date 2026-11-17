@@ -4,7 +4,7 @@ import type { Map as MLMap } from 'maplibre-gl';
 import turfArea from '@turf/area';
 import turfLength from '@turf/length';
 import { formatArea } from '@dl/shared';
-import { addSatellite, baseStyle } from './MapView';
+import { addSatellite, baseStyle, DEFAULT_VIEW, MAP_LOCALE, set3D, START_3D, Toggle3D } from './MapView';
 import { api } from '../lib/api';
 
 type Ring = [number, number][];
@@ -15,6 +15,9 @@ export default function DrawMap({ importUrl, initial, center, onSave, saving }: 
   const map = useRef<MLMap | null>(null);
   const [ring, setRing] = useState<Ring>(() => ringFrom(initial));
   const [drawing, setDrawing] = useState(false);
+  const [is3d, setIs3d] = useState(true);
+  const is3dRef = useRef(is3d);
+  is3dRef.current = is3d;
   const [source, setSource] = useState('draw');
   const vertexMarkers = useRef<maplibregl.Marker[]>([]);
   const drawingRef = useRef(drawing);
@@ -24,12 +27,13 @@ export default function DrawMap({ importUrl, initial, center, onSave, saving }: 
 
   useEffect(() => {
     if (!el.current) return;
-    const m = new maplibregl.Map({ container: el.current, style: baseStyle(), center: center ?? [-49.3, -16.6], zoom: center ? 13 : 5, doubleClickZoom: false, dragRotate: false });
+    const m = new maplibregl.Map({ container: el.current, style: baseStyle(), center: center ?? DEFAULT_VIEW.center, zoom: center ? 13 : DEFAULT_VIEW.zoom, doubleClickZoom: false, dragRotate: false, locale: MAP_LOCALE, ...START_3D });
     map.current = m;
-    m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+    m.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
     m.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     m.on('load', () => {
       addSatellite(m); // no desenho do perímetro, ver o terreno importa mais que o mapa de contornos
+      if (is3dRef.current) set3D(m, true, false);
       m.addSource('draft', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
       m.addLayer({ id: 'draft-fill', type: 'fill', source: 'draft', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#f8b817', 'fill-opacity': 0.28 } });
       m.addLayer({ id: 'draft-line', type: 'line', source: 'draft', paint: { 'line-color': '#0a0a0a', 'line-width': 2.2 } });
@@ -107,6 +111,7 @@ export default function DrawMap({ importUrl, initial, center, onSave, saving }: 
           </button>
           {ring.length > 0 && !drawing && <button type="button" className="btn small ghost" style={{ background: '#f8f9f5' }} onClick={() => { setRing([]); setImported(null); }}>Limpar</button>}
         </div>
+        <div className="map-layers"><Toggle3D on={is3d} onChange={(v) => { setIs3d(v); if (map.current) set3D(map.current, v); }} /></div>
       </div>
       <div className="spread">
         <div className="row small">

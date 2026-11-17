@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
-  APPROVAL_STAGES, CONFIDENTIALITY, DOC_CATEGORIES, LAND_STATUS, LAND_TYPES, MODALITIES, PUBLICATION_STATUS, TECHNICAL_KEYS, UFS, VALIDATION_STATUS, VIABILITY,
-  formatArea, formatBRL, type Confidentiality, type DocCategory, type PublicationStatus, type TechnicalKey,
+  APPROVAL_STAGES, CONFIDENTIALITY, DOC_CATEGORIES, LAND_STATUS, LAND_TYPES, MODALITIES, PUBLICATION_STATUS, ROLES, TECHNICAL_KEYS, UFS, VALIDATION_STATUS, VIABILITY,
+  formatArea, formatBRL, type Confidentiality, type DocCategory, type PublicationStatus, type Role, type TechnicalKey,
 } from '@dl/shared';
 import { api, ApiError, NEW_TAB, openFile } from '../lib/api';
 import { useSession } from '../lib/session';
@@ -494,12 +494,24 @@ function PublishStep({ o, reload, update, flush }: { o: any; reload: () => void;
         <h2>Intermediador responsável</h2>
         <div className="row">
           <select className="input" style={{ maxWidth: 360 }} value={primary?.broker_id ?? ''} disabled={!can('routing', 'update')} aria-label="Intermediador"
-            onChange={(e) => e.target.value && act(() => api(`/api/opportunities/${o.id}/assignments`, { body: { broker_id: e.target.value, role: 'primary', reason: primary ? 'Substituição pelo painel' : 'Atribuição inicial' } }), 'Intermediador atualizado').then(history.reload)}>
+            onChange={(e) => {
+              // lê o valor já: act() salva a área antes, a tela redesenha e a lista volta ao valor anterior
+              const brokerId = e.target.value;
+              if (brokerId) void act(() => api(`/api/opportunities/${o.id}/assignments`, { body: { broker_id: brokerId, role: 'primary', reason: primary ? 'Substituição pelo painel' : 'Atribuição inicial' } }), 'Intermediador atualizado').then(history.reload);
+            }}>
             <option value="">Sem responsável — interesses vão para a central</option>
-            {brokers.data?.items.filter((b: any) => b.active).map((b: any) => <option key={b.id} value={b.id}>{b.name}{b.creci_status !== 'ativo' ? ' (CRECI não validado)' : ''}</option>)}
+            {brokers.data?.items.filter((b: any) => b.active && b.user_active !== false).map((b: any) => <option key={b.id} value={b.id}>{b.name}{b.role && b.role !== 'broker' ? ` — ${ROLES[b.role as Role]}` : ''}{b.creci_status !== 'ativo' ? ' (CRECI não validado)' : ''}</option>)}
           </select>
-          {primary && <span className="small muted">WhatsApp {primary.whatsapp}</span>}
+          {primary && <span className="small muted">{primary.whatsapp ? `WhatsApp ${primary.whatsapp}` : 'Sem WhatsApp cadastrado'}</span>}
         </div>
+        {primary && (primary.creci_status !== 'ativo' || !primary.whatsapp) && (
+          <p className="notice" style={{ margin: 0 }}>
+            {primary.creci_status !== 'ativo' && <>O CRECI de {primary.name} ainda não foi validado. A publicação é permitida, mas a comissão só pode ser lançada com CRECI ativo. </>}
+            {!primary.whatsapp && <>Sem WhatsApp, os interessados desta área vão para o número central. </>}
+            {can('user', 'update') ? <Link to="/painel/usuarios">Atualizar em Usuários → Gerenciar</Link> : 'Peça a um administrador para atualizar o cadastro.'}
+          </p>
+        )}
+        {can('user', 'update') && <p className="small muted" style={{ margin: 0 }}>Administradores e gestores aparecem nesta lista quando marcados como "também atua como intermediador" em <Link to="/painel/usuarios">Usuários</Link>.</p>}
         {history.data?.items.length > 1 && (
           <details><summary className="small">Histórico de atribuições ({history.data.items.length})</summary>
             <div className="timeline small" style={{ marginTop: '0.5rem' }}>{history.data.items.map((h: any) => <div key={h.id}><b>{h.broker_name}</b> — {new Date(h.created_at).toLocaleDateString('pt-BR')}{h.ended_at ? ` a ${new Date(h.ended_at).toLocaleDateString('pt-BR')}` : ' (atual)'}{h.reason ? ` · ${h.reason}` : ''}{h.assigned_by_name ? ` · por ${h.assigned_by_name}` : ''}</div>)}</div>

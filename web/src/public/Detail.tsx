@@ -62,7 +62,9 @@ export default function Detail() {
   if (!a) return <div className="page"><Loading /></div>;
 
   const st = statusLabel[a.status];
-  const tech = Object.entries(a.technical) as [TechnicalKey, { value: any; validation_status: string }][];
+  // só o que foi preenchido: campo sem valor não vira linha vazia na ficha
+  const tech = (Object.entries(a.technical) as [TechnicalKey, { value: any; validation_status: string }][])
+    .filter(([, v]) => v && v.value != null && v.value !== '' && !(Array.isArray(v.value) && v.value.length === 0));
   const potential = tech.filter(([k]) => ['viabilidade', 'estagio_aprovacao', 'coef_aproveitamento', 'taxa_ocupacao', 'gabarito', 'zoneamento', 'uso_solo'].includes(k));
   const terrain = tech.filter(([k]) => !potential.some(([p]) => p === k));
   const share = async () => {
@@ -134,7 +136,7 @@ export default function Detail() {
             </div>
           )}
 
-          <section className="block">
+          {(terrain.length > 0 || a.frontage_m || a.depth_m || a.topography) && <section className="block">
             <h2>Características do terreno</h2>
             <dl className="spec">
               {a.frontage_m && <><dt>Testada</dt><dd>{a.frontage_m.toLocaleString('pt-BR')} m</dd></>}
@@ -144,9 +146,9 @@ export default function Detail() {
                 <div key={k} style={{ display: 'contents' }}><dt>{TECHNICAL_KEYS[k]?.label ?? k}</dt><dd><span>{techValue(k, v.value)}</span><ValidationBadge status={v.validation_status} /></dd></div>
               ))}
             </dl>
-          </section>
+          </section>}
 
-          {potential.length > 0 && (
+          {(potential.length > 0 || a.commercial.expected_units || a.commercial.vgv_preliminary) && (
             <section className="block">
               <h2>Potencial de desenvolvimento</h2>
               <dl className="spec">

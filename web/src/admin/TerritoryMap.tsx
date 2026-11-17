@@ -6,7 +6,7 @@ import area from '@turf/area';
 import length from '@turf/length';
 import { LAND_TYPES, TERRITORY_LAYERS, TERRITORY_LAYER_KEYS, UFS, VIABILITY, formatArea, parseCoordinates, type TerritoryLayer } from '@dl/shared';
 import { api, DEMO, downloadFile, qs } from '../lib/api';
-import { addSatellite, baseStyle, CITIES, HAS_SATELLITE, setSatelliteVisible } from '../components/MapView';
+import { addCityLabels, addSatellite, baseStyle, CITIES, HAS_SATELLITE, set3D, setSatelliteVisible, MAP_LOCALE, START_3D, Toggle3D, viewBounds } from '../components/MapView';
 import { Field, Modal, useToast } from '../components/ui';
 import { PageHeader } from './Shell';
 
@@ -25,6 +25,9 @@ export default function TerritoryMap() {
   const [uf, setUf] = useState('GO');
   const [layers, setLayers] = useState<Partial<Record<Layer, boolean>>>({ sigef: true, snci: true, car: true });
   const [sat, setSat] = useState(HAS_SATELLITE);
+  const [is3d, setIs3d] = useState(true);
+  const is3dRef = useRef(is3d);
+  is3dRef.current = is3d;
   const [tab, setTab] = useState<'explorar' | 'radar'>('explorar');
   const [results, setResults] = useState<any>(null);
   const [measuring, setMeasuring] = useState(false);
@@ -32,6 +35,12 @@ export default function TerritoryMap() {
   const measuringRef = useRef(measuring); measuringRef.current = measuring;
   const [info, setInfo] = useState<{ zoom: number; counts: Record<string, number>; loading: boolean; error?: string }>({ zoom: 0, counts: {}, loading: false });
   const [pick, setPick] = useState<any>(null);
+  // ficha flutuante sobre o mapa (clique ou "Ver no mapa" do radar)
+  const [card, setCard] = useState<any>(null);
+  // candidatas do radar: desenhadas no mapa e destacadas na lista quando o imóvel é clicado
+  const [radarItems, setRadarItems] = useState<any[]>([]);
+  const [radarSel, setRadarSel] = useState<number | null>(null);
+  const radarIdsRef = useRef<Set<number>>(new Set());
   const [create, setCreate] = useState<any>(null);
   const [goto, setGoto] = useState('');
   const ufRef = useRef(uf); ufRef.current = uf;
@@ -44,8 +53,7 @@ export default function TerritoryMap() {
     if (!m) return;
     const z = m.getZoom();
     if (z < MIN_ZOOM) { setInfo({ zoom: z, counts: {}, loading: false }); TERRITORY_LAYER_KEYS.forEach((l) => (m.getSource(l) as any)?.setData(EMPTY)); return; }
-    const b = m.getBounds();
-    const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((v) => v.toFixed(5)).join(',');
+    const bbox = viewBounds(m).map((v) => v.toFixed(5)).join(',');
     setInfo((s) => ({ ...s, zoom: z, loading: true, error: undefined }));
     const counts: Record<string, number> = {};
     for (const l of TERRITORY_LAYER_KEYS) {
@@ -61,19 +69,15 @@ export default function TerritoryMap() {
 
   useEffect(() => {
     if (!el.current) return;
-    const m = new maplibregl.Map({ container: el.current, style: baseStyle(), center: [-49.45, -16.6], zoom: 9, dragRotate: false });
+    const m = new maplibregl.Map({ container: el.current, style: baseStyle(), center: [-49.45, -16.6], zoom: 9, dragRotate: false, locale: MAP_LOCALE, ...START_3D });
     map.current = m;
-    m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+    m.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
     m.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     m.on('load', async () => {
-      for (const [name, lng, lat] of CITIES) {
-        const d = document.createElement('div');
-        d.style.cssText = 'font: 500 11px var(--font); color:#6e6e6a; pointer-events:none; white-space:nowrap';
-        d.textContent = `• ${name}`;
-        new maplibregl.Marker({ element: d, anchor: 'left' }).setLngLat([lng, lat]).addTo(m);
-      }
+      addCityLabels(m);
       addSatellite(m);
       setSatelliteVisible(m, HAS_SATELLITE);
+      if (is3dRef.current) set3D(m, true, false);
       // de baixo para cima: restrições e ambientais por baixo, parcelas por cima
       for (const k of [...TERRITORY_LAYER_KEYS].reverse()) {
         const meta = TERRITORY_LAYERS[k];
@@ -84,6 +88,9 @@ export default function TerritoryMap() {
       m.addSource('measure', { type: 'geojson', data: EMPTY });
       m.addSource('pick', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
       m.addSource('own', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      m.addSource('radar', { type: 'geojson', data: EMPTY });
+      m.addLayer({ id: 'radar-fill', type: 'fill', source: 'radar', paint: { 'fill-color': '#f8b817', 'fill-opacity': 0.12 } });
+      m.addLayer({ id: 'radar-line', type: 'line', source: 'radar', paint: { 'line-color': '#f8b817', 'line-width': 2, 'line-dasharray': [2, 1.5] } });
       m.addLayer({ id: 'pick-fill', type: 'fill', source: 'pick', paint: { 'fill-color': '#f8b817', 'fill-opacity': 0.35 } });
       m.addLayer({ id: 'pick-line', type: 'line', source: 'pick', paint: { 'line-color': '#f8b817', 'line-width': 3 } });
       m.addLayer({ id: 'measure-fill', type: 'fill', source: 'measure', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.2 } });
@@ -110,11 +117,18 @@ export default function TerritoryMap() {
       if (measuringRef.current) { setMPoints((p) => [...p, [e.lngLat.lng, e.lngLat.lat]]); return; }
       if (m.getZoom() < MIN_ZOOM) { m.easeTo({ center: e.lngLat, zoom: MIN_ZOOM + 0.5 }); return; }
       setPick({ loading: true, lat: e.lngLat.lat, lng: e.lngLat.lng });
+      setCard({ loading: true });
       try {
         const r = await api(`/api/territory/lookup${qs({ lat: e.lngLat.lat.toFixed(6), lng: e.lngLat.lng.toFixed(6), uf: ufRef.current })}`);
         setPick(r);
-        (m.getSource('pick') as any).setData({ type: 'FeatureCollection', features: r.parcels.filter((p: any) => p.geometry).slice(0, 1) });
-      } catch (err: any) { setPick({ error: err.message }); }
+        const parcels = r.parcels.filter((p: any) => p.properties);
+        // se o imóvel clicado é uma candidata do radar, ele vem primeiro e a lista lateral vai até ele
+        const inRadar = parcels.find((p: any) => radarIdsRef.current.has(p.properties.id));
+        const first = inRadar ?? parcels[0] ?? null;
+        setCard(first ? { parcels: inRadar ? [inRadar, ...parcels.filter((p: any) => p !== inRadar)] : parcels, sel: first, links: r.links, lat: r.lat, lng: r.lng, existing: r.existing } : { empty: true });
+        if (inRadar) setRadarSel(inRadar.properties.id);
+        (m.getSource('pick') as any).setData({ type: 'FeatureCollection', features: first?.geometry ? [first] : [] });
+      } catch (err: any) { setPick({ error: err.message }); setCard({ error: err.message }); }
     });
     m.on('mousemove', (e) => {
       if (measuringRef.current) { m.getCanvas().style.cursor = 'crosshair'; return; }
@@ -141,6 +155,21 @@ export default function TerritoryMap() {
   const mDist = mPoints.length >= 2 ? length({ type: 'Feature', geometry: { type: 'LineString', coordinates: mPoints }, properties: {} } as any, { units: 'meters' }) : 0;
   const mArea = mPoints.length >= 3 ? area({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[...mPoints, mPoints[0]]] }, properties: {} } as any) : 0;
 
+  const showCandidate = (f: any) => {
+    setRadarSel(f.properties?.id ?? null);
+    setCard({ parcels: [f], sel: f, lat: f.center?.[1], lng: f.center?.[0] });
+    fitFeature(f);
+  };
+  // candidatas do radar no mapa
+  useEffect(() => {
+    radarIdsRef.current = new Set(radarItems.map((c) => c.properties.id));
+    (map.current?.getSource('radar') as any)?.setData({ type: 'FeatureCollection', features: radarItems.filter((c) => c.geometry) });
+  }, [radarItems]);
+  const startCreate = (p: any, lat?: number, lng?: number) => setCreate({
+    title: p.properties.nome || `Área em ${p.properties.municipio ?? uf}`, uf: p.properties.uf ?? uf, city: p.properties.municipio ?? '', land_type: 'gleba', intended_uses: [], geojson: p.geometry, area: p.properties.area_ha,
+    territory: [{ layer: p.properties.layer, source: p.properties.fonte, consulted_at: p.consulted_at ?? new Date().toISOString(), properties: p.properties }], registry: null,
+    lat: lat ?? p.center?.[1], lng: lng ?? p.center?.[0],
+  });
   const fitFeature = (f: any) => {
     const m = map.current; if (!m) return;
     (m.getSource('pick') as any)?.setData({ type: 'FeatureCollection', features: [f] });
@@ -180,6 +209,7 @@ export default function TerritoryMap() {
             <span><i style={{ background: '#0a0a0a', border: '2px solid #f8b817' }} />Prospecção já aberta</span>
           </div>
           <div className="map-tools">
+            <Toggle3D on={is3d} onChange={(v) => { setIs3d(v); if (map.current) set3D(map.current, v); }} />
             {HAS_SATELLITE && <div className="seg" role="group" aria-label="Mapa base">
               <button type="button" aria-pressed={sat} onClick={() => setSat(true)}>Satélite</button>
               <button type="button" aria-pressed={!sat} onClick={() => setSat(false)}>Mapa</button>
@@ -191,16 +221,15 @@ export default function TerritoryMap() {
             {mPoints.length > 0 && <button type="button" className="btn link small" onClick={() => setMPoints([])}>Limpar</button>}
           </div>}
           {info.zoom < MIN_ZOOM && <div className="map-hint">Aproxime o mapa (ou clique) para carregar as parcelas</div>}
+          {card && <ParcelCard card={card} onSelect={(p) => { setCard({ ...card, sel: p }); (map.current?.getSource('pick') as any)?.setData({ type: 'FeatureCollection', features: p.geometry ? [p] : [] }); if (radarIdsRef.current.has(p.properties.id)) setRadarSel(p.properties.id); }}
+            onClose={() => { setCard(null); (map.current?.getSource('pick') as any)?.setData(EMPTY); }} onCreate={(p) => startCreate(p, card.lat, card.lng)} />}
         </div>
         <aside className="territory-side">
           {!DEMO && <div className="seg wide" role="tablist" aria-label="Modo">
             <button type="button" role="tab" aria-selected={tab === 'explorar'} aria-pressed={tab === 'explorar'} onClick={() => setTab('explorar')}>Explorar</button>
             <button type="button" role="tab" aria-selected={tab === 'radar'} aria-pressed={tab === 'radar'} onClick={() => setTab('radar')}>Radar de captação</button>
           </div>}
-          {tab === 'radar' && <Radar uf={uf} setUf={setUf} onShow={fitFeature} onCreate={(f) => setCreate({
-            title: f.properties.nome || `Área em ${f.properties.municipio ?? uf}`, uf: f.properties.uf ?? uf, city: f.properties.municipio ?? '', land_type: 'gleba', intended_uses: [], geojson: f.geometry, area: f.properties.area_ha,
-            territory: [{ layer: f.properties.layer, source: f.properties.fonte, consulted_at: new Date().toISOString(), properties: f.properties }], registry: null, lat: f.center?.[1], lng: f.center?.[0],
-          })} />}
+          {tab === 'radar' && <Radar uf={uf} setUf={setUf} onShow={showCandidate} onCreate={(f) => startCreate(f)} selectedId={radarSel} onResults={setRadarItems} />}
           {tab === 'explorar' && <>
           <div className="stack-s">
             <div className="row">
@@ -300,13 +329,21 @@ export default function TerritoryMap() {
 }
 
 /** Radar: encontra parcelas candidatas por critério ou a partir de um perfil de aquisição. */
-function Radar({ uf, setUf, onShow, onCreate }: { uf: string; setUf: (u: string) => void; onShow: (f: any) => void; onCreate: (f: any) => void }) {
+function Radar({ uf, setUf, onShow, onCreate, selectedId, onResults }: { uf: string; setUf: (u: string) => void; onShow: (f: any) => void; onCreate: (f: any) => void; selectedId: number | null; onResults: (items: any[]) => void }) {
   const [f, setF] = useState({ municipio: '', min_ha: '', max_ha: '', layer: 'sigef', exclude_restrictions: true, profile_id: '' });
   const [profiles, setProfiles] = useState<any[]>([]);
   const [res, setRes] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   useEffect(() => { api('/api/profiles').then((r) => setProfiles(r.items ?? [])).catch(() => {}); }, []);
+  useEffect(() => { onResults(res?.items ?? []); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [res]);
+  // ao sair do radar, as candidatas saem do mapa
+  useEffect(() => () => onResults([]), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // imóvel clicado no mapa (ou "Ver no mapa"): a lista vai até a candidata e a destaca
+  useEffect(() => {
+    if (selectedId == null) return;
+    document.getElementById(`radar-${selectedId}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [selectedId]);
   const run = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setErr('');
     try {
@@ -334,7 +371,7 @@ function Radar({ uf, setUf, onShow, onCreate }: { uf: string; setUf: (u: string)
       {res?.loaded && <>
         <p className="small muted" style={{ margin: 0 }}><b>{res.items.length}{res.items.length === 100 ? '+' : ''}</b> candidatas. Fonte: {res.source}, base de {new Date(res.loaded_at).toLocaleDateString('pt-BR')}. {res.restrictions_checked.length ? `Restrições conferidas: ${res.restrictions_checked.map((k: Layer) => TERRITORY_LAYERS[k].short).join(', ')}.` : 'Nenhuma base de restrição carregada para esta UF.'}</p>
         {res.items.map((c: any) => (
-          <div key={c.id} className="parcel-card" style={{ cursor: 'default' }}>
+          <div key={c.id} id={`radar-${c.properties.id}`} className={`parcel-card ${selectedId === c.properties.id ? 'on' : ''}`} style={{ cursor: 'default' }}>
             <span className="row" style={{ justifyContent: 'space-between' }}><b>{c.properties.nome ?? c.properties.codigo}</b>{c.demand_count > 0 && <span className="badge ok">{c.demand_count} comprador(es)</span>}</span>
             <span className="small">{c.properties.municipio ?? '—'} · {c.properties.area_ha?.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ha</span>
             {c.demand?.[0] && <span className="small muted">{c.demand[0].partner}: {c.demand[0].profile}</span>}
@@ -346,6 +383,83 @@ function Radar({ uf, setUf, onShow, onCreate }: { uf: string; setUf: (u: string)
         ))}
       </>}
     </form>
+  );
+}
+
+const SIGEF_PARCELA = (uuid: string) => `https://sigef.incra.gov.br/geo/parcela/detalhe/${uuid}/`;
+const CCIR_URL = 'https://sncr.serpro.gov.br/ccir/emissao';
+const RECEITA_CERTIDOES = 'https://servicos.receitafederal.gov.br/servico/certidoes/';
+const CNIR_URL = 'https://www.gov.br/pt-br/servicos/consultar-cadastro-nacional-de-imovel-rural';
+const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+const fmtDate = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}/.test(v) ? new Date(`${v.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : v);
+
+function PcRow({ label, value, onCopy, children }: { label: string; value?: any; onCopy?: () => void; children?: React.ReactNode }) {
+  if ((value == null || value === '') && !children) return null;
+  return (
+    <div className="pc-row">
+      <span className="pc-label">{label}</span>
+      <span className="pc-value">{children ?? value}{onCopy && <button type="button" className="pc-copy" title={`Copiar ${label}`} aria-label={`Copiar ${label}`} onClick={onCopy}>⧉</button>}</span>
+    </div>
+  );
+}
+
+/** Ficha do imóvel clicado, sobre o mapa: dados da base oficial, cópia rápida e atalhos para CCIR e certidão do ITR. */
+function ParcelCard({ card, onSelect, onClose, onCreate }: { card: any; onSelect: (p: any) => void; onClose: () => void; onCreate: (p: any) => void }) {
+  const toast = useToast();
+  const copy = (v: string, what: string) => void navigator.clipboard?.writeText(v).then(() => toast(`${what} copiado`)).catch(() => toast('Não foi possível copiar', true));
+  const open = (url: string, v?: string | null, what?: string) => { if (v) copy(v, what!); window.open(url, '_blank', 'noopener'); };
+  const close = <button type="button" className="pc-close" onClick={onClose} aria-label="Fechar">×</button>;
+  if (card.loading) return <div className="parcel-float" role="status"><span className="muted small">Consultando o imóvel…</span></div>;
+  if (card.error) return <div className="parcel-float">{close}<p className="error-text small" style={{ margin: 0 }}>{card.error}</p></div>;
+  if (card.empty) return <div className="parcel-float">{close}<p className="small" style={{ margin: 0 }}>Nenhum imóvel das camadas ativas neste ponto.</p></div>;
+  const p = card.sel;
+  const pr = p.properties;
+  const meta = TERRITORY_LAYERS[pr.layer as Layer];
+  const tag = [meta?.short ?? pr.layer, pr.natureza].filter(Boolean).join(' — ').toUpperCase();
+  const cafir: { nirf: string; nome: string | null; area_ha: number | null; metodo: string }[] = pr.cafir ?? [];
+  const ha = (v: number | null) => (v != null ? `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ha` : '');
+  return (
+    <div className="parcel-float" style={{ borderLeftColor: meta?.color ?? '#f8b817' }} role="dialog" aria-label="Dados do imóvel">
+      {close}
+      {card.parcels.length > 1 && <div className="chips" style={{ marginBottom: 6 }}>{card.parcels.map((x: any, i: number) => (
+        <button type="button" key={i} className="chip" aria-pressed={x === p} onClick={() => onSelect(x)}>{TERRITORY_LAYERS[x.properties.layer as Layer]?.short ?? x.properties.layer}{x.properties.nome ? ` · ${x.properties.nome}` : ''}</button>
+      ))}</div>}
+      <span className="pc-tag" style={{ color: meta?.color, borderColor: meta?.color }}>{tag}</span>
+      <b className="pc-title">{pr.nome || pr.codigo || 'Imóvel sem nome'}</b>
+      {card.existing?.length > 0 && <p className="notice small" style={{ margin: '4px 0' }}>Já no sistema: {card.existing.map((x: any) => <Link key={x.id} to={x.kind === 'prospect' ? `/painel/captacao/${x.id}` : `/painel/areas/${x.id}`} style={{ marginRight: 6 }}>{x.code}</Link>)}</p>}
+      <div className="pc-grid">
+        <PcRow label="Cód. INCRA (SNCR)" value={pr.codigo_sncr} onCopy={pr.codigo_sncr ? () => copy(pr.codigo_sncr, 'Código INCRA') : undefined} />
+        <PcRow label="Matrícula" value={pr.matricula ? `${pr.matricula}${pr.cns_serventia ? ` · CNS ${pr.cns_serventia}` : ''}` : null} onCopy={pr.matricula ? () => copy(pr.matricula, 'Matrícula') : undefined} />
+        <PcRow label="Situação" value={pr.situacao} />
+        <PcRow label={pr.layer === 'sigef' ? 'Certificado em' : 'Data'} value={fmtDate(pr.data_referencia)} />
+        <PcRow label="Área" value={pr.area_ha != null ? `${Number(pr.area_ha).toLocaleString('pt-BR', { maximumFractionDigits: 4 })} ha` : null} />
+        <PcRow label="Município" value={pr.municipio ? `${pr.municipio}${pr.uf ? `/${pr.uf}` : ''}` : null} />
+        {pr.codigo && <PcRow label={pr.layer === 'sigef' ? 'Certificação' : 'Código'} onCopy={() => copy(pr.codigo, 'Código')}>
+          {pr.layer === 'sigef' && isUuid(pr.codigo)
+            ? <a href={SIGEF_PARCELA(pr.codigo)} target="_blank" rel="noopener noreferrer" style={{ wordBreak: 'break-all' }}>{pr.codigo}</a>
+            : <span style={{ wordBreak: 'break-all' }}>{pr.codigo}</span>}
+        </PcRow>}
+        <PcRow label="NIRF (CAFIR)">
+          {cafir.length ? <span className="stack-s" style={{ gap: 2 }}>{cafir.map((c) => (
+            <span key={c.nirf}>
+              <b>{c.nirf}</b><button type="button" className="pc-copy" title="Copiar NIRF" aria-label="Copiar NIRF" onClick={() => copy(c.nirf, 'NIRF')}>⧉</button>
+              {c.metodo === 'provavel' && <span className="badge warn" style={{ marginLeft: 4 }} title="Sem vínculo pelo código INCRA: achado pelo mesmo nome, município e área parecida. Confira antes de emitir.">provável</span>}
+              {(c.nome || c.area_ha != null) && <span className="muted small" style={{ display: 'block' }}>Na Receita: {[c.nome, ha(c.area_ha)].filter(Boolean).join(' · ')}</span>}
+            </span>
+          ))}</span> : <span className="muted small">Sem NIRF vinculado no CAFIR. <a href={CNIR_URL} target="_blank" rel="noopener noreferrer">Consultar no CNIR</a></span>}
+        </PcRow>
+      </div>
+      <div className="row" style={{ gap: 6, marginTop: 8 }}>
+        <button type="button" className="btn ghost small" title="Certidão de débitos do imóvel rural (ITR) na Receita Federal. Copia o NIRF, se houver." onClick={() => open(RECEITA_CERTIDOES, cafir[0]?.nirf, 'NIRF')}>Emitir certidão ITR</button>
+        {pr.codigo_sncr && <button type="button" className="btn ghost small" title="CCIR no SNCR/INCRA. Copia o código do imóvel para colar no formulário." onClick={() => open(CCIR_URL, pr.codigo_sncr, 'Código INCRA')}>Emitir CCIR</button>}
+        {pr.id != null && <>
+          <button type="button" className="btn ghost small" onClick={() => void downloadFile(`/api/territory/features/${pr.id}/kml`, `${pr.layer}-${pr.id}.kml`).catch((x) => toast(x.message, true))}>KML</button>
+          <button type="button" className="btn ghost small" onClick={() => void downloadFile(`/api/territory/features/${pr.id}/dxf`, `${pr.layer}-${pr.id}.dxf`).catch((x) => toast(x.message, true))}>DXF</button>
+        </>}
+        <button type="button" className="btn gold small" onClick={() => onCreate(p)}>Criar prospecção</button>
+      </div>
+      {pr.fonte && <span className="pc-source">{pr.fonte}</span>}
+    </div>
   );
 }
 
