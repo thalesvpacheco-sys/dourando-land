@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Brand } from '../components/ui';
 import { captureAttribution } from '../lib/api';
+import './site.css';
 
 export default function PublicLayout() {
   const [open, setOpen] = useState(false);
@@ -11,11 +12,13 @@ export default function PublicLayout() {
   return (
     <>
       <a href="#conteudo" className="sr-only">Pular para o conteúdo</a>
-      <header className="site-header">
-        <div className="inner">
-          <Link to="/" className="brand" aria-label="Quero Área — início"><Brand /></Link>
-          <button className="btn ghost small menu-btn" aria-expanded={open} aria-controls="site-nav" onClick={() => setOpen(!open)}>Menu</button>
-          <nav id="site-nav" className={`site-nav ${open ? 'open' : ''}`} aria-label="Principal">
+      <header className="q-header">
+        <div className="q-wrap">
+          <Link to="/" className="brand" aria-label="Quero Área — início"><Brand light /></Link>
+          <button className="q-menu-btn" aria-label={open ? 'Fechar menu' : 'Abrir menu'} aria-expanded={open} aria-controls="site-nav" onClick={() => setOpen(!open)}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </button>
+          <nav id="site-nav" className={`q-nav ${open ? 'open' : ''}`} aria-label="Principal">
             <NavLink to="/areas">Banco de áreas</NavLink>
             <NavLink to="/mapa">Mapa</NavLink>
             <NavLink to="/como-funciona">Como funciona</NavLink>
@@ -23,33 +26,34 @@ export default function PublicLayout() {
             <NavLink to="/construtoras">Para construtoras</NavLink>
             <NavLink to="/sobre">Sobre</NavLink>
             <NavLink to="/painel">Entrar</NavLink>
+            <Link to="/contato" className="q-btn q-btn-gold q-btn-sm">Falar com a Quero Área</Link>
           </nav>
-          <Link to="/contato" className="btn gold small">Falar com a Dourado</Link>
         </div>
       </header>
       <main id="conteudo"><Outlet /></main>
-      <footer className="site-footer">
-        <div className="inner">
-          <div className="stack-s">
-            <Link to="/" className="brand" style={{ display: 'flex' }}><Brand light /></Link>
-            <p style={{ maxWidth: '40ch', marginTop: '0.75rem' }}>
-              Áreas para incorporação, loteamento e desenvolvimento, com informação técnica identificada por fonte e status de validação.
-            </p>
-            <p className="small muted">Parâmetros não verificados não constituem aprovação oficial. Valores e condições sujeitos a confirmação.</p>
+      <footer className="q-footer">
+        <div className="q-wrap">
+          <div className="q-foot-grid">
+            <div>
+              <Link to="/" className="brand" style={{ display: 'flex' }} aria-label="Quero Área — início"><Brand light /></Link>
+              <p className="q-foot-tag">Banco de áreas para incorporação, loteamento e desenvolvimento imobiliário.</p>
+              <p className="q-foot-tag" style={{ fontSize: 12.5 }}>Parâmetros não verificados não constituem aprovação oficial. Valores e condições sujeitos a confirmação.</p>
+            </div>
+            <nav aria-label="Rodapé">
+              <Link to="/areas">Banco de áreas</Link>
+              <Link to="/areas?featured=1">Oportunidades em destaque</Link>
+              <Link to="/mapa">Mapa de oportunidades</Link>
+              <Link to="/como-funciona">Como funciona</Link>
+              <Link to="/proprietarios">Cadastrar uma área</Link>
+              <Link to="/construtoras">Construtoras e investidores</Link>
+              <Link to="/parceiros">Seja um parceiro</Link>
+              <Link to="/contato">Contato e WhatsApp</Link>
+              <Link to="/privacidade">Privacidade e dados pessoais</Link>
+            </nav>
           </div>
-          <div>
-            <Link to="/areas">Banco de áreas</Link>
-            <Link to="/areas?featured=1">Oportunidades em destaque</Link>
-            <Link to="/mapa">Mapa de oportunidades</Link>
-            <Link to="/como-funciona">Como funciona</Link>
-          </div>
-          <div>
-            <Link to="/proprietarios">Cadastrar uma área</Link>
-            <Link to="/construtoras">Construtoras e investidores</Link>
-            <Link to="/parceiros">Seja um parceiro</Link>
-            <Link to="/contato">Contato e WhatsApp</Link>
-            <Link to="/privacidade">Privacidade e dados pessoais</Link>
-            <p className="small muted" style={{ marginTop: '1rem' }}>Tecnologia WingsBr</p>
+          <div className="q-foot-bottom">
+            <span>Uma plataforma Dourado Real Estate Partners</span>
+            <span className="q-mono">queroarea.com.br</span>
           </div>
         </div>
       </footer>

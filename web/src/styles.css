@@ -316,7 +316,7 @@ dl.spec dd { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap;
 .steps-how { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid var(--ink); counter-reset: step; }
 .steps-how li { list-style: none; padding: 1.25rem 1.25rem 1.5rem 0; border-right: 1px solid var(--line); margin-right: 1.25rem; counter-increment: step; }
 .steps-how li:last-child { border-right: 0; }
-.steps-how li::before { content: counter(step); display: block; font-family: var(--display); font-weight: 600; letter-spacing: -0.02em; font-size: 1.95rem; line-height: 1.08; color: var(--gold-deep); margin-bottom: 0.4rem; }
+.steps-how li::before { content: counter(step); display: block; font-family: var(--display); font-weight: 600; letter-spacing: -0.02em; font-size: 1.95rem; line-height: 1.08; color: var(--gold-ink); margin-bottom: 0.4rem; }
 .steps-how h3 { font-size: var(--t1); margin-bottom: 0.4rem; }
 .steps-how p { color: var(--ink-2); font-size: 0.95rem; }
 @media (max-width: 860px) { .steps-how { grid-template-columns: 1fr; } .steps-how li { border-right: 0; border-bottom: 1px solid var(--line); margin: 0; } }
