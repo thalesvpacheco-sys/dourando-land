@@ -13,9 +13,10 @@ UFS="${UFS:-GO DF}"
 CARGA=carga
 mkdir -p "$CARGA"
 log() { echo "[$(date '+%F %T')] $*"; }
-# </dev/null: sem isso o docker consome a entrada do laço que lê a lista de bases
 recalc() { docker compose exec -T db psql -q -U dourado -d dourado < scripts/cafir-provavel.sql >/dev/null 2>&1 && log "NIRF provável recalculado" || log "NIRF provável não recalculado (CAFIR ainda não carregado?)"; }
-imp() { docker compose exec -T app npx tsx src/integrations/territory-cli.ts "$@" </dev/null 2>&1 | grep -v 'npm notice'; }
+# </dev/null: sem isso o docker consome a entrada do laço que lê a lista de bases.
+# Devolve o status da carga, não o do grep: sem isso, uma carga que falhou deixaria o --append seguinte somar ao dado antigo.
+imp() { out=$(docker compose exec -T app npx tsx src/integrations/territory-cli.ts "$@" </dev/null 2>&1); st=$?; printf '%s\n' "$out" | grep -v 'npm notice'; return $st; }
 
 log "Bases de serviços oficiais (UFs: $UFS)"
 python3 scripts/baixar-bases.py --uf $UFS --dest "$CARGA" || log "Falha no download (as bases já carregadas continuam valendo)"
