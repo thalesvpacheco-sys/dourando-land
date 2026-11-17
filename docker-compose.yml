@@ -44,6 +44,7 @@ services:
     ports: ["80:80", "443:443"]
     environment:
       DOMINIO: ${DOMINIO}
+      DOMINIO_ANTIGO: ${DOMINIO_ANTIGO:-areas.douradoimob.com.br}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy:/data

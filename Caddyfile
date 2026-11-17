@@ -5,3 +5,9 @@
 	}
 	reverse_proxy app:4200
 }
+
+# www e o endereço antigo levam ao domínio principal mantendo o caminho: links já compartilhados continuam valendo.
+# DOMINIO_ANTIGO não pode ser igual a DOMINIO (o Caddy recusa dois blocos para o mesmo endereço).
+www.{$DOMINIO}, {$DOMINIO_ANTIGO:areas.douradoimob.com.br} {
+	redir https://{$DOMINIO}{uri} permanent
+}
