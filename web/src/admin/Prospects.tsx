@@ -158,7 +158,7 @@ export function ProspectDetail() {
       <div className="spread" style={{ marginBottom: '1rem', alignItems: 'start' }}>
         <div>
           <div className="row small muted"><Link to="/painel/captacao">Captação</Link><span>/</span><span>{p.code}</span><span>{PROSPECT_SOURCES[p.source as keyof typeof PROSPECT_SOURCES]}</span></div>
-          <h1 style={{ fontFamily: 'var(--display)', fontWeight: 400, fontSize: '2.3rem', lineHeight: 1, marginTop: 4 }}>{p.title}</h1>
+          <h1 style={{ fontFamily: 'var(--display)', fontWeight: 600, fontSize: '1.72rem', lineHeight: 1.08, marginTop: 4 }}>{p.title}</h1>
           <div className="row" style={{ marginTop: 6 }}>
             {p.status === 'converted' ? <Link className="badge ok" to={`/painel/areas/${p.opportunity_id}`}>Convertida em área — abrir</Link> : p.status === 'discarded' ? <span className="badge bad">Descartada: {p.discard_reason}</span> : <span className="badge">{PROSPECT_STAGES[p.stage as ProspectStage]}</span>}
             {p.area_m2 && <span className="muted small">{formatArea(p.area_m2)}</span>}
@@ -236,7 +236,7 @@ export function ProspectDetail() {
 
         <div className="stack">
           <div className="panel">
-            <div className="spread"><h2>Pré-qualificação</h2><b style={{ fontFamily: 'var(--display)', fontSize: '2.4rem', lineHeight: 1 }}>{p.score}<span className="muted" style={{ fontSize: '1.2rem' }}>/100</span></b></div>
+            <div className="spread"><h2>Pré-qualificação</h2><b style={{ fontFamily: 'var(--display)', fontSize: '1.8rem', lineHeight: 1.08 }}>{p.score}<span className="muted" style={{ fontSize: '0.9rem' }}>/100</span></b></div>
             <table className="data" style={{ marginTop: 6 }}><tbody>{p.score_items.map((s: any) => <tr key={s.label}><td>{s.label}<div className="small muted">{s.note}</div></td><td className="r num">{s.earned}/{s.weight}</td></tr>)}</tbody></table>
           </div>
 

@@ -35,8 +35,8 @@ export default function DrawMap({ importUrl, initial, center, onSave, saving }: 
       addSatellite(m); // no desenho do perímetro, ver o terreno importa mais que o mapa de contornos
       if (is3dRef.current) set3D(m, true, false);
       m.addSource('draft', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      m.addLayer({ id: 'draft-fill', type: 'fill', source: 'draft', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#f8b817', 'fill-opacity': 0.28 } });
-      m.addLayer({ id: 'draft-line', type: 'line', source: 'draft', paint: { 'line-color': '#0a0a0a', 'line-width': 2.2 } });
+      m.addLayer({ id: 'draft-fill', type: 'fill', source: 'draft', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#ffb800', 'fill-opacity': 0.28 } });
+      m.addLayer({ id: 'draft-line', type: 'line', source: 'draft', paint: { 'line-color': '#0a1a33', 'line-width': 2.2 } });
       setRing((r) => [...r]);
     });
     m.on('click', (e: any) => {
@@ -60,7 +60,7 @@ export default function DrawMap({ importUrl, initial, center, onSave, saving }: 
     vertexMarkers.current.forEach((v) => v.remove());
     vertexMarkers.current = ring.map((pt, i) => {
       const d = document.createElement('div');
-      d.style.cssText = 'width:12px;height:12px;border-radius:50%;background:#f8f9f5;border:2px solid #0a0a0a;cursor:move';
+      d.style.cssText = 'width:12px;height:12px;border-radius:50%;background:#f4f6fa;border:2px solid #0a1a33;cursor:move';
       d.title = 'Arraste para mover. Clique com o botão direito para remover.';
       d.oncontextmenu = (ev) => { ev.preventDefault(); setRing((r) => r.filter((_, k) => k !== i)); };
       const mk = new maplibregl.Marker({ element: d, draggable: true }).setLngLat(pt).addTo(m);
@@ -109,7 +109,7 @@ export default function DrawMap({ importUrl, initial, center, onSave, saving }: 
           <button type="button" className={`btn small ${drawing ? 'gold' : ''}`} onClick={() => { if (!drawing) { setRing([]); setSource('draw'); setImported(null); } setDrawing(!drawing); }}>
             {drawing ? 'Concluir desenho' : ring.length ? 'Redesenhar perímetro' : 'Desenhar perímetro'}
           </button>
-          {ring.length > 0 && !drawing && <button type="button" className="btn small ghost" style={{ background: '#f8f9f5' }} onClick={() => { setRing([]); setImported(null); }}>Limpar</button>}
+          {ring.length > 0 && !drawing && <button type="button" className="btn small ghost" style={{ background: '#f4f6fa' }} onClick={() => { setRing([]); setImported(null); }}>Limpar</button>}
         </div>
         <div className="map-layers"><Toggle3D on={is3d} onChange={(v) => { setIs3d(v); if (map.current) set3D(map.current, v); }} /></div>
       </div>

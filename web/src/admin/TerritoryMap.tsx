@@ -89,13 +89,13 @@ export default function TerritoryMap() {
       m.addSource('pick', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
       m.addSource('own', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
       m.addSource('radar', { type: 'geojson', data: EMPTY });
-      m.addLayer({ id: 'radar-fill', type: 'fill', source: 'radar', paint: { 'fill-color': '#f8b817', 'fill-opacity': 0.12 } });
-      m.addLayer({ id: 'radar-line', type: 'line', source: 'radar', paint: { 'line-color': '#f8b817', 'line-width': 2, 'line-dasharray': [2, 1.5] } });
-      m.addLayer({ id: 'pick-fill', type: 'fill', source: 'pick', paint: { 'fill-color': '#f8b817', 'fill-opacity': 0.35 } });
-      m.addLayer({ id: 'pick-line', type: 'line', source: 'pick', paint: { 'line-color': '#f8b817', 'line-width': 3 } });
+      m.addLayer({ id: 'radar-fill', type: 'fill', source: 'radar', paint: { 'fill-color': '#ffb800', 'fill-opacity': 0.12 } });
+      m.addLayer({ id: 'radar-line', type: 'line', source: 'radar', paint: { 'line-color': '#ffb800', 'line-width': 2, 'line-dasharray': [2, 1.5] } });
+      m.addLayer({ id: 'pick-fill', type: 'fill', source: 'pick', paint: { 'fill-color': '#ffb800', 'fill-opacity': 0.35 } });
+      m.addLayer({ id: 'pick-line', type: 'line', source: 'pick', paint: { 'line-color': '#ffb800', 'line-width': 3 } });
       m.addLayer({ id: 'measure-fill', type: 'fill', source: 'measure', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.2 } });
       m.addLayer({ id: 'measure-line', type: 'line', source: 'measure', paint: { 'line-color': '#ffffff', 'line-width': 2.5, 'line-dasharray': [2, 1] } });
-      m.addLayer({ id: 'measure-pt', type: 'circle', source: 'measure', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 4, 'circle-color': '#ffffff', 'circle-stroke-color': '#0a0a0a', 'circle-stroke-width': 1.5 } });
+      m.addLayer({ id: 'measure-pt', type: 'circle', source: 'measure', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 4, 'circle-color': '#ffffff', 'circle-stroke-color': '#0a1a33', 'circle-stroke-width': 1.5 } });
       // prospecções já abertas (evita captação duplicada)
       try {
         const r = await api('/api/prospects?status=open,converted');
@@ -105,7 +105,7 @@ export default function TerritoryMap() {
           d.type = 'button';
           d.textContent = f.properties.code.replace('CAP-', '');
           d.title = `${f.properties.code} — ${f.properties.title}`;
-          d.style.cssText = 'padding:2px 6px;border-radius:3px;background:#0a0a0a;color:#f8b817;border:2px solid #f8b817;font:700 11px var(--font);cursor:pointer';
+          d.style.cssText = 'padding:2px 6px;border-radius:3px;background:#0a1a33;color:#ffb800;border:2px solid #ffb800;font:700 11px var(--font);cursor:pointer';
           d.onclick = (ev) => { ev.stopPropagation(); nav(`/painel/captacao/${f.properties.id}`); };
           new maplibregl.Marker({ element: d }).setLngLat(f.geometry.coordinates as [number, number]).addTo(m);
         }
@@ -206,7 +206,7 @@ export default function TerritoryMap() {
           <div ref={el} className="map" />
           <div className="map-legend">
             {available.filter((l) => layers[l.key as Layer]).map((l) => <span key={l.key}><i style={{ border: `2px solid ${TERRITORY_LAYERS[l.key as Layer].color}` }} />{TERRITORY_LAYERS[l.key as Layer].short}</span>)}
-            <span><i style={{ background: '#0a0a0a', border: '2px solid #f8b817' }} />Prospecção já aberta</span>
+            <span><i style={{ background: '#0a1a33', border: '2px solid #ffb800' }} />Prospecção já aberta</span>
           </div>
           <div className="map-tools">
             <Toggle3D on={is3d} onChange={(v) => { setIs3d(v); if (map.current) set3D(map.current, v); }} />
@@ -214,7 +214,7 @@ export default function TerritoryMap() {
               <button type="button" aria-pressed={sat} onClick={() => setSat(true)}>Satélite</button>
               <button type="button" aria-pressed={!sat} onClick={() => setSat(false)}>Mapa</button>
             </div>}
-            <button type="button" className="btn small" style={{ background: measuring ? 'var(--gold)' : '#fff', color: '#0a0a0a' }} aria-pressed={measuring} onClick={() => { setMeasuring(!measuring); setMPoints([]); }}>{measuring ? 'Encerrar medição' : 'Medir'}</button>
+            <button type="button" className="btn small" style={{ background: measuring ? 'var(--gold)' : '#fff', color: '#0a1a33' }} aria-pressed={measuring} onClick={() => { setMeasuring(!measuring); setMPoints([]); }}>{measuring ? 'Encerrar medição' : 'Medir'}</button>
           </div>
           {measuring && <div className="map-measure" role="status">
             {mPoints.length === 0 ? 'Clique no mapa para marcar os pontos' : <>Distância: <b>{mDist >= 1000 ? `${(mDist / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} km` : `${Math.round(mDist).toLocaleString('pt-BR')} m`}</b>{mArea > 0 && <> · Área: <b>{formatArea(mArea)}</b></>}</>}
@@ -419,7 +419,7 @@ function ParcelCard({ card, onSelect, onClose, onCreate }: { card: any; onSelect
   const cafir: { nirf: string; nome: string | null; area_ha: number | null; metodo: string }[] = pr.cafir ?? [];
   const ha = (v: number | null) => (v != null ? `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ha` : '');
   return (
-    <div className="parcel-float" style={{ borderLeftColor: meta?.color ?? '#f8b817' }} role="dialog" aria-label="Dados do imóvel">
+    <div className="parcel-float" style={{ borderLeftColor: meta?.color ?? '#ffb800' }} role="dialog" aria-label="Dados do imóvel">
       {close}
       {card.parcels.length > 1 && <div className="chips" style={{ marginBottom: 6 }}>{card.parcels.map((x: any, i: number) => (
         <button type="button" key={i} className="chip" aria-pressed={x === p} onClick={() => onSelect(x)}>{TERRITORY_LAYERS[x.properties.layer as Layer]?.short ?? x.properties.layer}{x.properties.nome ? ` · ${x.properties.nome}` : ''}</button>

@@ -18,7 +18,7 @@ export default function Bank() {
   const [q, setQ] = useState(params.get('q') ?? '');
   const explain: string[] | undefined = (loc.state as any)?.explain;
 
-  useEffect(() => { document.title = 'Banco de áreas — Dourado Land Intelligence'; }, []);
+  useEffect(() => { document.title = 'Banco de áreas — Quero Área'; }, []);
   useEffect(() => {
     api(`/api/public/opportunities${qs(filters)}`).then(setData).catch(() => setData({ total: 0, items: [], page: 1, per: 24 }));
     api<{ features: AreaFeature[] }>(`/api/public/map${qs(filters)}`).then((r) => setFeatures(r.features)).catch(() => {});

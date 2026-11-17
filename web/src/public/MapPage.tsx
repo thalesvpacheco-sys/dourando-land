@@ -15,7 +15,7 @@ export default function MapPage() {
   const [compare, setCompare] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
 
-  useEffect(() => { document.title = 'Mapa de oportunidades — Dourado Land Intelligence'; }, []);
+  useEffect(() => { document.title = 'Mapa de oportunidades — Quero Área'; }, []);
   useEffect(() => { api<{ features: AreaFeature[] }>(`/api/public/map${qs(filters)}`).then((r) => setFeatures(r.features)).catch(() => {}); }, [filters]);
 
   const inView = bbox ? features.filter(({ geometry: { coordinates: [x, y] } }) => x >= bbox[0] && x <= bbox[2] && y >= bbox[1] && y <= bbox[3]) : features;

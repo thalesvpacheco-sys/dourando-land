@@ -87,11 +87,11 @@ export function ValidationBadge({ status }: { status: string }) {
 
 const BASE = import.meta.env.BASE_URL;
 
-/** Assinatura oficial da Dourado Real Estate Partners (arquivos em /brand). `light` = versão para fundo escuro. */
+/** Assinatura horizontal da Quero Área (arquivos em /brand, gerados dos originais do brand book). `light` = versão negativa, para fundo escuro. */
 export function Brand({ light, sub }: { light?: boolean; sub?: string }) {
   return (
     <span style={{ display: 'grid', gap: 2 }}>
-      <img src={`${BASE}brand/${light ? 'lockup-light' : 'lockup'}.png`} alt="Dourado Real Estate Partners" width={141} height={36} />
+      <img src={`${BASE}brand/${light ? 'lockup-light' : 'lockup'}.png`} alt="Quero Área" width={166} height={30} />
       {sub && <span className="sub">{sub}</span>}
     </span>
   );

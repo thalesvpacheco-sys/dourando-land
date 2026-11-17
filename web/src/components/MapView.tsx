@@ -123,8 +123,8 @@ export const DEFAULT_VIEW = { center: [-48.6, -19.6] as [number, number], zoom: 
 export function addCityLabels(m: MLMap) {
   const labels = CITIES.map(([name, lng, lat, minZoom]) => {
     const d = document.createElement('div');
-    d.style.cssText = 'font: 500 11px var(--font); color:#6e6e6a; pointer-events:none; white-space:nowrap; transform: translateY(-10px)';
-    d.innerHTML = `<span style="display:inline-block;width:4px;height:4px;background:#6e6e6a;border-radius:50%;margin-right:4px;vertical-align:middle"></span>${name}`;
+    d.style.cssText = 'font: 500 11px var(--font); color:#5a6a84; pointer-events:none; white-space:nowrap; transform: translateY(-10px)';
+    d.innerHTML = `<span style="display:inline-block;width:4px;height:4px;background:#5a6a84;border-radius:50%;margin-right:4px;vertical-align:middle"></span>${name}`;
     new maplibregl.Marker({ element: d, anchor: 'left' }).setLngLat([lng, lat]).addTo(m);
     return { d, minZoom };
   });
@@ -242,12 +242,12 @@ export default function MapView({ features, className = 'map', fit = true, cente
       if (layer !== 'provider') addCityLabels(m);
       m.addSource('areas', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, cluster: true, clusterRadius: 46, clusterMaxZoom: 10 });
       m.addSource('shapes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      m.addLayer({ id: 'shape-fill', type: 'fill', source: 'shapes', paint: { 'fill-color': '#f8b817', 'fill-opacity': ['case', ['==', ['get', 'kind'], 'exact'], 0.3, 0.14] } });
+      m.addLayer({ id: 'shape-fill', type: 'fill', source: 'shapes', paint: { 'fill-color': '#ffb800', 'fill-opacity': ['case', ['==', ['get', 'kind'], 'exact'], 0.3, 0.14] } });
       m.addLayer({
         id: 'shape-line', type: 'line', source: 'shapes',
-        paint: { 'line-color': ['case', ['==', ['get', 'kind'], 'exact'], '#0a0a0a', '#cc9814'], 'line-width': ['case', ['==', ['get', 'kind'], 'exact'], 2.2, 1.4], 'line-dasharray': ['case', ['==', ['get', 'kind'], 'exact'], ['literal', [1, 0]], ['literal', [2, 2]]] },
+        paint: { 'line-color': ['case', ['==', ['get', 'kind'], 'exact'], '#0a1a33', '#d99c00'], 'line-width': ['case', ['==', ['get', 'kind'], 'exact'], 2.2, 1.4], 'line-dasharray': ['case', ['==', ['get', 'kind'], 'exact'], ['literal', [1, 0]], ['literal', [2, 2]]] },
       });
-      m.addLayer({ id: 'shape-compare', type: 'line', source: 'shapes', filter: ['in', ['get', 'code'], ['literal', []]], paint: { 'line-color': '#0a0a0a', 'line-width': 3.5 } });
+      m.addLayer({ id: 'shape-compare', type: 'line', source: 'shapes', filter: ['in', ['get', 'code'], ['literal', []]], paint: { 'line-color': '#0a1a33', 'line-width': 3.5 } });
       // pontos sem cluster: invisíveis (o marcador é HTML), servem para consulta
       m.addLayer({ id: 'pts', type: 'circle', source: 'areas', filter: ['!', ['has', 'point_count']], paint: { 'circle-radius': 6, 'circle-opacity': 0 } });
       m.addLayer({ id: 'cls', type: 'circle', source: 'areas', filter: ['has', 'point_count'], paint: { 'circle-radius': 12, 'circle-opacity': 0 } });
@@ -293,7 +293,7 @@ export default function MapView({ features, className = 'map', fit = true, cente
         d.type = 'button';
         if (p.cluster) {
           const size = 30 + Math.min(26, Math.sqrt(p.point_count) * 8);
-          d.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:#0a0a0a;color:#fff;border:3px solid #f8b817;font:700 13px var(--font);cursor:pointer;box-shadow:0 2px 8px #0003`;
+          d.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:#0a1a33;color:#fff;border:3px solid #ffb800;font:700 13px var(--font);cursor:pointer;box-shadow:0 2px 8px #0003`;
           d.textContent = String(p.point_count);
           d.setAttribute('aria-label', `${p.point_count} áreas — aproximar`);
           d.onclick = async () => {
@@ -302,7 +302,7 @@ export default function MapView({ features, className = 'map', fit = true, cente
           };
         } else {
           const ha = p.area_m2 >= 10000 ? `${Math.round(p.area_m2 / 10000)} ha` : `${Math.round(p.area_m2 / 1000)} mil m²`;
-          d.style.cssText = 'padding:3px 8px;border-radius:3px;background:#f8b817;color:#0a0a0a;border:2px solid #fff;font:650 12px var(--font);font-variation-settings:"wdth" 112;cursor:pointer;box-shadow:0 2px 6px #0003;white-space:nowrap';
+          d.style.cssText = 'padding:3px 8px;border-radius:3px;background:#ffb800;color:#0a1a33;border:2px solid #fff;font:650 12px var(--font);font-variation-settings:"wdth" 112;cursor:pointer;box-shadow:0 2px 6px #0003;white-space:nowrap';
           d.textContent = ha;
           d.setAttribute('aria-label', `${p.title}, ${ha}`);
           d.onclick = (ev) => {
@@ -385,8 +385,8 @@ export default function MapView({ features, className = 'map', fit = true, cente
       )}
       {legend && (
         <div className="map-legend">
-          <span><i style={{ background: '#f8b8174d', border: '2px solid #0a0a0a' }} />Perímetro informado</span>
-          <span><i style={{ background: '#f8b81724', border: '1.5px dashed #cc9814' }} />Localização aproximada</span>
+          <span><i style={{ background: '#ffb8004d', border: '2px solid #0a1a33' }} />Perímetro informado</span>
+          <span><i style={{ background: '#ffb80024', border: '1.5px dashed #d99c00' }} />Localização aproximada</span>
         </div>
       )}
     </div>

@@ -21,7 +21,7 @@ export default function Shell() {
   if (loading) return <div className="page"><Loading /></div>;
   if (!me) return <Navigate to="/painel/entrar" replace state={{ from: loc.pathname }} />;
   const role = me.user.role as Role;
-  const title = (document.title = 'Painel — Dourado Land Intelligence');
+  const title = (document.title = 'Painel — Quero Área');
   void title;
 
   const item = (to: string, label: string, count?: number) => (
@@ -31,7 +31,7 @@ export default function Shell() {
   return (
     <div className="shell">
       <aside className={`sidebar ${open ? 'open' : ''}`}>
-        <Link to="/painel" className="brand" style={{ display: 'flex' }}><Brand light sub="Land Intelligence" /></Link>
+        <Link to="/painel" className="brand" style={{ display: 'flex' }}><Brand light sub="Painel" /></Link>
         <nav aria-label="Painel">
           {can('dashboard', 'read') && item('/painel', 'Visão geral')}
           {role === 'broker' && item('/painel', 'Minha carteira')}
@@ -85,10 +85,10 @@ export default function Shell() {
 
 /** Título da página dentro da barra superior. */
 export function PageHeader({ title, children }: { title: string; children?: React.ReactNode }) {
-  useEffect(() => { document.title = `${title} — Painel Dourado`; }, [title]);
+  useEffect(() => { document.title = `${title} — Painel Quero Área`; }, [title]);
   return (
     <div className="spread" style={{ marginBottom: '1.25rem' }}>
-      <h1 style={{ fontFamily: 'var(--display)', fontWeight: 400, fontSize: '2.3rem', lineHeight: 1 }}>{title}</h1>
+      <h1 style={{ fontFamily: 'var(--display)', fontWeight: 600, fontSize: '1.72rem', lineHeight: 1.08 }}>{title}</h1>
       {children && <div className="row">{children}</div>}
     </div>
   );

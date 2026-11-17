@@ -80,7 +80,7 @@ export function Google3DView({ lat, lng, areaM2, geometry, name, quiet }: { lat:
       const map = new Map3DElement({ center: { lat, lng, altitude: ground }, range: areaM2 ? Math.max(900, Math.sqrt(areaM2) * 3.4) : 2500, tilt: 55, heading: 20, mode: 'SATELLITE' });
       const rings: number[][][] = geometry?.type === 'Polygon' ? [geometry.coordinates[0]] : geometry?.type === 'MultiPolygon' ? geometry.coordinates.map((p: any) => p[0]) : [];
       for (const ring of rings) {
-        const poly = new Polygon3DElement({ strokeColor: '#0a0a0a', strokeWidth: 3, fillColor: 'rgba(248,184,23,0.35)', altitudeMode: 'CLAMP_TO_GROUND', drawsOccludedSegments: true });
+        const poly = new Polygon3DElement({ strokeColor: '#0a1a33', strokeWidth: 3, fillColor: 'rgba(248,184,23,0.35)', altitudeMode: 'CLAMP_TO_GROUND', drawsOccludedSegments: true });
         poly.outerCoordinates = ring.map(([x, y]) => ({ lat: y, lng: x }));
         map.append(poly);
       }

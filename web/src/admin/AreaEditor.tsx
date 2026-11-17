@@ -101,7 +101,7 @@ export default function AreaEditor() {
       <div className="spread" style={{ marginBottom: '1.25rem', alignItems: 'start' }}>
         <div>
           <div className="row small muted"><Link to="/painel/areas">Banco de áreas</Link><span>/</span><span>{o.code}</span></div>
-          <h1 style={{ fontFamily: 'var(--display)', fontWeight: 400, fontSize: '2.3rem', lineHeight: 1, marginTop: 4 }}>{o.public_title || o.internal_name}</h1>
+          <h1 style={{ fontFamily: 'var(--display)', fontWeight: 600, fontSize: '1.72rem', lineHeight: 1.08, marginTop: 4 }}>{o.public_title || o.internal_name}</h1>
           <div className="row" style={{ marginTop: 6 }}>
             <span className={`badge ${pubBadge[o.publication_status]}`}>{PUBLICATION_STATUS[o.publication_status as PublicationStatus]}</span>
             <span className="badge">{LAND_STATUS[o.status as keyof typeof LAND_STATUS]}</span>
@@ -609,7 +609,7 @@ function ReadOnlyArea({ o, reload }: { o: any; reload: () => void }) {
       <div className="spread" style={{ marginBottom: '1.25rem' }}>
         <div>
           <span className="small muted">{o.code}</span>
-          <h1 style={{ fontSize: 'var(--t2)', fontFamily: 'var(--display)', fontWeight: 400 }}>{o.public_title || o.internal_name}</h1>
+          <h1 style={{ fontSize: 'var(--t2)', fontFamily: 'var(--display)', fontWeight: 600 }}>{o.public_title || o.internal_name}</h1>
           <div className="row" style={{ marginTop: 6 }}><span className={`badge ${pubBadge[o.publication_status]}`}>{PUBLICATION_STATUS[o.publication_status as PublicationStatus]}</span><span className="badge">{LAND_STATUS[o.status as keyof typeof LAND_STATUS]}</span></div>
         </div>
         {o.publication_status === 'published' && <Link className="btn ghost" to={`/areas/${o.slug}`} target={NEW_TAB}>Ver no portal</Link>}

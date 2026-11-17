@@ -5,7 +5,7 @@ import { Field } from '../components/ui';
 import { useMeta } from './Filters';
 
 function Page({ title, lede, children }: { title: string; lede?: string; children: ReactNode }) {
-  useEffect(() => { document.title = `${title} — Dourado Land Intelligence`; }, [title]);
+  useEffect(() => { document.title = `${title} — Quero Área`; }, [title]);
   return (
     <div className="page-narrow">
       <h1 className="page-title">{title}</h1>

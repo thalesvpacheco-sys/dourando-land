@@ -12,9 +12,9 @@ export function AuthFrame({ children }: { children: React.ReactNode }) {
       <div className="login-art" aria-hidden="true">
         <svg viewBox="0 0 600 800" preserveAspectRatio="xMidYMid slice" style={{ width: '100%', height: '100%' }}>
           {Array.from({ length: 22 }, (_, i) => (
-            <path key={i} d={`M -20 ${120 + i * 30} C 160 ${60 + i * 32}, 360 ${200 + i * 26}, 640 ${100 + i * 31}`} fill="none" stroke="#2e2e2c" strokeWidth="1.2" />
+            <path key={i} d={`M -20 ${120 + i * 30} C 160 ${60 + i * 32}, 360 ${200 + i * 26}, 640 ${100 + i * 31}`} fill="none" stroke="#2b4570" strokeWidth="1.2" />
           ))}
-          <path d="M 170 300 L 420 250 L 470 470 L 230 540 Z" fill="#f8b81733" stroke="#f8b817" strokeWidth="3" strokeLinejoin="round" />
+          <path d="M 170 300 L 420 250 L 470 470 L 230 540 Z" fill="#ffb80033" stroke="#ffb800" strokeWidth="3" strokeLinejoin="round" />
           {[[170, 300], [420, 250], [470, 470], [230, 540]].map(([x, y]) => <circle key={x} cx={x} cy={y} r="6" fill="#ffffff" />)}
         </svg>
       </div>
@@ -105,7 +105,7 @@ export default function Login() {
   const [codes, setCodes] = useState<string[]>([]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { document.title = 'Entrar — Dourado Land Intelligence'; }, []);
+  useEffect(() => { document.title = 'Entrar — Quero Área'; }, []);
   // a tela de códigos de recuperação precisa aparecer antes de sair daqui, mesmo com a sessão já aberta
   if (me && step !== 'recovery') return <Navigate to={(loc.state as any)?.from ?? '/painel'} replace />;
 
@@ -198,7 +198,7 @@ export function SetPassword() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   useEffect(() => {
-    document.title = 'Definir senha — Dourado Land Intelligence';
+    document.title = 'Definir senha — Quero Área';
     if (!token) { setError('Link incompleto. Abra o link inteiro que você recebeu.'); return; }
     api('/api/auth/link/check', { body: { token }, auth: false }).then(setInfo).catch((e) => setError(e.message));
   }, [token]);

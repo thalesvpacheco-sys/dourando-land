@@ -4,7 +4,7 @@ import { useState } from 'react';
  * Gráficos de série única (um matiz, sem legenda). Rótulos e valores em tinta de texto, nunca na cor da série.
  * Barras finas com extremidade arredondada de 4px ancorada na base, 2px de respiro entre barras, tooltip ao passar o mouse.
  */
-export function ColumnChart({ data, height = 180, valueLabel, color = '#2b2b29' }: { data: { label: string; value: number; detail?: string }[]; height?: number; valueLabel: string; color?: string }) {
+export function ColumnChart({ data, height = 180, valueLabel, color = '#16294a' }: { data: { label: string; value: number; detail?: string }[]; height?: number; valueLabel: string; color?: string }) {
   const [hover, setHover] = useState<number | null>(null);
   if (!data.length) return <p className="muted small">Sem dados no período.</p>;
   const max = Math.max(1, ...data.map((d) => d.value));
@@ -20,8 +20,8 @@ export function ColumnChart({ data, height = 180, valueLabel, color = '#2b2b29' 
           const y = 6 + plotH - (t / nice) * plotH;
           return (
             <g key={t}>
-              <line x1={padL} x2={W} y1={y} y2={y} stroke="#e9e9e5" strokeWidth={1} />
-              <text x={padL - 6} y={y + 4} fontSize="11" textAnchor="end" fill="#6e6e6a">{t}</text>
+              <line x1={padL} x2={W} y1={y} y2={y} stroke="#e9ecf2" strokeWidth={1} />
+              <text x={padL - 6} y={y + 4} fontSize="11" textAnchor="end" fill="#5a6a84">{t}</text>
             </g>
           );
         })}
@@ -33,9 +33,9 @@ export function ColumnChart({ data, height = 180, valueLabel, color = '#2b2b29' 
           return (
             <g key={d.label} onMouseEnter={() => setHover(i)}>
               <rect x={padL + i * step} y={0} width={step} height={H} fill="transparent" />
-              {h > 0 && <path d={`M${x},${y + plotH - (y - 6) + 0} V${y + r} Q${x},${y} ${x + r},${y} H${x + bw - r} Q${x + bw},${y} ${x + bw},${y + r} V${6 + plotH} Z`} fill={hover === i ? '#cc9814' : color} />}
+              {h > 0 && <path d={`M${x},${y + plotH - (y - 6) + 0} V${y + r} Q${x},${y} ${x + r},${y} H${x + bw - r} Q${x + bw},${y} ${x + bw},${y + r} V${6 + plotH} Z`} fill={hover === i ? '#d99c00' : color} />}
               {(i % Math.ceil(data.length / 7) === 0 || i === data.length - 1) && (
-                <text x={x + bw / 2} y={H - 6} fontSize="11" textAnchor="middle" fill="#6e6e6a">{d.label}</text>
+                <text x={x + bw / 2} y={H - 6} fontSize="11" textAnchor="middle" fill="#5a6a84">{d.label}</text>
               )}
             </g>
           );

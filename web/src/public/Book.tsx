@@ -19,7 +19,7 @@ export default function Book() {
   const features = useMemo(() => (a ? toFeature(a) : []), [a]);
   if (!a) return <div className="page"><Loading /></div>;
   const date = new Date().toLocaleDateString('pt-BR');
-  const foot = (n: number) => <div className="book-foot"><span>{a.code} · Dourado Real Estate Partners</span><span>Informações sujeitas a confirmação. Parâmetros não verificados não constituem aprovação oficial. Gerado em {date}.</span><span>{n}/3</span></div>;
+  const foot = (n: number) => <div className="book-foot"><span>{a.code} · Quero Área</span><span>Informações sujeitas a confirmação. Parâmetros não verificados não constituem aprovação oficial. Gerado em {date}.</span><span>{n}/3</span></div>;
 
   return (
     <div className="book" data-book-ready={mapReady ? '' : undefined}>

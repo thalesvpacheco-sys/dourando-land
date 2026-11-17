@@ -13,7 +13,7 @@ export default function PublicLayout() {
       <a href="#conteudo" className="sr-only">Pular para o conteúdo</a>
       <header className="site-header">
         <div className="inner">
-          <Link to="/" className="brand" aria-label="Dourado Real Estate Partners — início"><Brand /></Link>
+          <Link to="/" className="brand" aria-label="Quero Área — início"><Brand /></Link>
           <button className="btn ghost small menu-btn" aria-expanded={open} aria-controls="site-nav" onClick={() => setOpen(!open)}>Menu</button>
           <nav id="site-nav" className={`site-nav ${open ? 'open' : ''}`} aria-label="Principal">
             <NavLink to="/areas">Banco de áreas</NavLink>

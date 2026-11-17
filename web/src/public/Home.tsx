@@ -16,7 +16,7 @@ export default function Home() {
   const [nlNote, setNlNote] = useState('');
 
   useEffect(() => {
-    document.title = 'Dourado Land Intelligence — áreas para incorporação e loteamento';
+    document.title = 'Quero Área — encontre a área certa para o seu projeto';
     api<{ features: AreaFeature[] }>('/api/public/map').then((r) => setFeatures(r.features)).catch(() => {});
     api<{ items: PublicArea[] }>('/api/public/opportunities?featured=1&per=4').then((r) => setFeatured(r.items)).catch(() => {});
   }, []);
