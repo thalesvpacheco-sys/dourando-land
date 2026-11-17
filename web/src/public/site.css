@@ -34,6 +34,7 @@
 }
 @media (max-width: 560px) {
   .q-nav > .q-btn { display: none; }
+  .q-nav:not(.open) { display: none; } /* sem itens visíveis: o botão de menu vai para o canto direito */
   .q-nav.open > .q-btn { display: inline-flex; }
 }
 
