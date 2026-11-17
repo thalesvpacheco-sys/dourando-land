@@ -49,7 +49,7 @@ export function set3D(m: MLMap, on: boolean, animate = true) {
   if (on) {
     // uma fonte só para relevo e sombreamento: metade dos downloads de elevação
     if (!m.getSource('dem')) m.addSource('dem', DEM);
-    if (!m.getLayer('hillshade')) m.addLayer({ id: 'hillshade', type: 'hillshade', source: 'dem', paint: { 'hillshade-exaggeration': 0.35, 'hillshade-shadow-color': '#3a3a36' } }, m.getLayer('uf-line') ? 'uf-line' : undefined);
+    if (!m.getLayer('hillshade')) m.addLayer({ id: 'hillshade', type: 'hillshade', source: 'dem', paint: { 'hillshade-exaggeration': 0.35, 'hillshade-shadow-color': '#16294a' } }, m.getLayer('uf-line') ? 'uf-line' : undefined);
     m.setTerrain({ source: 'dem', exaggeration: 1.4 });
     m.dragRotate.enable(); m.touchZoomRotate.enableRotation(); m.touchPitch.enable();
     m.setMaxPitch(70);

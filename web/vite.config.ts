@@ -24,7 +24,8 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 1600,
       assetsInlineLimit: demo ? (file: string) => (/\.woff2?$/.test(file) ? true : undefined) : undefined,
     },
-    server: { port: 5174, host: true, proxy: { '/api': api, '/media': api, '/webhooks': api } },
+    // demo/static simulam a API no navegador e servem /media de demo-public: sem proxy, senão as fotos voltam 502 sem a API local
+    server: { port: 5174, host: true, proxy: demo || site ? undefined : { '/api': api, '/media': api, '/webhooks': api } },
     preview: { port: 5174, proxy: { '/api': api, '/media': api } },
   };
 });

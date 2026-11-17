@@ -50,7 +50,7 @@ function ContactForm({ kind, submitLabel, extra }: { kind: 'proprietario' | 'par
 export function HowItWorks() {
   return (
     <Page title="Como funciona" lede="A Dourado capta, qualifica e intermedeia áreas para desenvolvimento imobiliário. A plataforma organiza cada etapa e registra quem fez o quê.">
-      <ol className="steps-how" style={{ padding: 0, gridTemplateColumns: '1fr 1fr' }}>
+      <ol className="steps-how two" style={{ padding: 0 }}>
         <li><h3>Captação</h3><p>A área entra com proprietário, matrícula e perímetro. Nada é publicado nessa fase.</p></li>
         <li><h3>Qualificação</h3><p>Zoneamento, infraestrutura e restrições recebem fonte, data de consulta e status: oficial, verificado ou declarado.</p></li>
         <li><h3>Autorização e publicação</h3><p>Com a autorização de divulgação do proprietário, um administrador revisa e publica. Preço, localização exata e proprietário podem ficar reservados.</p></li>
