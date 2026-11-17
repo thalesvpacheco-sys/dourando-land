@@ -27,7 +27,7 @@ function ContactForm({ kind, submitLabel, extra }: { kind: 'proprietario' | 'par
     try { await api('/api/public/contact', { body: { kind, ...f } }); track('generate_lead', { method: `form_${kind}` }); setState('done'); }
     catch (e: any) { setErr(e.message); setState('idle'); }
   };
-  if (state === 'done') return <p className="notice ok">Recebido. A equipe Dourado responde em até um dia útil.</p>;
+  if (state === 'done') return <p className="notice ok">Recebido. A equipe Quero Área responde em até um dia útil.</p>;
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
   return (
     <form className="stack panel" onSubmit={submit} style={{ padding: '1.5rem', color: 'var(--ink)', fontSize: '1rem' }}>
@@ -40,7 +40,7 @@ function ContactForm({ kind, submitLabel, extra }: { kind: 'proprietario' | 'par
         {extra?.includes('city') && <Field label="Cidade da área"><input onChange={set('city')} /></Field>}
       </div>
       <Field label={kind === 'proprietario' ? 'Conte sobre a área (tamanho, localização, matrícula)' : 'Mensagem'}><textarea onChange={set('message')} /></Field>
-      <label className="check"><input type="checkbox" checked={f.consent} onChange={(e) => setF({ ...f, consent: e.target.checked })} /><span>Autorizo a Dourado a usar estes dados para retornar o contato. <Link to="/privacidade">Como tratamos seus dados</Link>.</span></label>
+      <label className="check"><input type="checkbox" checked={f.consent} onChange={(e) => setF({ ...f, consent: e.target.checked })} /><span>Autorizo a Quero Área a usar estes dados para retornar o contato. <Link to="/privacidade">Como tratamos seus dados</Link>.</span></label>
       {err && <p className="error-text" role="alert">{err}</p>}
       <div><button className="btn" disabled={state === 'busy'}>{state === 'busy' ? 'Enviando…' : submitLabel}</button></div>
     </form>
@@ -49,7 +49,7 @@ function ContactForm({ kind, submitLabel, extra }: { kind: 'proprietario' | 'par
 
 export function HowItWorks() {
   return (
-    <Page title="Como funciona" lede="A Dourado capta, qualifica e intermedeia áreas para desenvolvimento imobiliário. A plataforma organiza cada etapa e registra quem fez o quê.">
+    <Page title="Como funciona" lede="A Quero Área capta, qualifica e intermedeia áreas para desenvolvimento imobiliário. A plataforma organiza cada etapa e registra quem fez o quê.">
       <ol className="steps-how two" style={{ padding: 0 }}>
         <li><h3>Captação</h3><p>A área entra com proprietário, matrícula e perímetro. Nada é publicado nessa fase.</p></li>
         <li><h3>Qualificação</h3><p>Zoneamento, infraestrutura e restrições recebem fonte, data de consulta e status: oficial, verificado ou declarado.</p></li>
@@ -65,7 +65,7 @@ export function HowItWorks() {
 
 export function Owners() {
   return (
-    <Page title="Para proprietários" lede="Se você tem uma gleba ou terreno com potencial de desenvolvimento, a Dourado avalia, qualifica e apresenta a área a construtoras e incorporadoras compatíveis.">
+    <Page title="Para proprietários" lede="Se você tem uma gleba ou terreno com potencial de desenvolvimento, a Quero Área avalia, qualifica e apresenta a área a construtoras e incorporadoras compatíveis.">
       <p>Você decide o que pode ser divulgado. A localização exata, o valor e seus dados podem ficar visíveis apenas para a equipe e para interessados qualificados.</p>
       <p>Depois do cadastro, você acompanha o andamento e envia documentos pelo seu acesso.</p>
       <ContactForm kind="proprietario" submitLabel="Enviar área para avaliação" extra={['city']} />
@@ -85,7 +85,7 @@ export function Builders() {
 
 export function Partners() {
   return (
-    <Page title="Seja um parceiro" lede="Corretores e intermediadores podem trabalhar áreas da carteira Dourado ou trazer novas captações.">
+    <Page title="Seja um parceiro" lede="Corretores e intermediadores podem trabalhar áreas da carteira Quero Área ou trazer novas captações.">
       <p>Cada oportunidade tem um intermediador responsável. Comissões seguem o contrato de intermediação de cada área e só se tornam devidas nos eventos previstos em contrato.</p>
       <ContactForm kind="parceiro" submitLabel="Quero ser parceiro" extra={['creci', 'company']} />
     </Page>
@@ -94,9 +94,11 @@ export function Partners() {
 
 export function About() {
   return (
-    <Page title="Sobre a Dourado" lede="A Dourado Real Estate Partners conecta proprietários de terra a quem desenvolve empreendimentos.">
-      <p className="notice">Texto institucional provisório. Substituir pelo conteúdo oficial da Dourado Real Estate Partners.</p>
-      <p>A plataforma Dourado Land Intelligence opera sobre a tecnologia WingsBr, que fornece identidade, CRM e mensageria.</p>
+    <Page title="Sobre a Quero Área" lede="Somos a plataforma que encontra a área certa para cada projeto imobiliário.">
+      {/* Texto do Brand Book v2.0 (Essência: quem somos, propósito e promessa) */}
+      <p>A Quero Área reúne um banco de áreas para incorporação, loteamento e desenvolvimento imobiliário, com os dados que incorporadores e proprietários precisam para decidir. É a evolução da Dourado Land Intelligence: o mesmo conhecimento de território, agora como uma plataforma de busca, análise e negociação.</p>
+      <p><b>Propósito:</b> conectar terra a projetos que transformam cidades.<br /><b>Promessa:</b> a área certa, com dados para decidir.</p>
+      <p>Atendemos incorporadoras, loteadoras, fundos, proprietários e corretores. A Quero Área é uma plataforma da Dourado Real Estate Partners e opera sobre a tecnologia WingsBr, que fornece identidade, CRM e mensageria.</p>
     </Page>
   );
 }
@@ -105,8 +107,8 @@ export function Contact() {
   // Número central configurado no painel (Atendimento e WhatsApp). Sem número, fica só o formulário.
   const wa = useMeta()?.central_whatsapp;
   return (
-    <Page title="Contato" lede="Fale com a equipe Dourado sobre uma área específica, uma parceria ou o seu perfil de aquisição.">
-      {wa && <p><a className="btn gold" href={`https://wa.me/${wa}?text=${encodeURIComponent('Olá! Vim pelo site da Dourado e gostaria de falar com a equipe.')}`} target="_blank" rel="noopener noreferrer" onClick={() => track('contact', { method: 'whatsapp_central' })}>Conversar pelo WhatsApp</a></p>}
+    <Page title="Contato" lede="Fale com a equipe Quero Área sobre uma área específica, uma parceria ou o seu perfil de aquisição.">
+      {wa && <p><a className="btn gold" href={`https://wa.me/${wa}?text=${encodeURIComponent('Olá! Vim pelo site da Quero Área e gostaria de falar com a equipe.')}`} target="_blank" rel="noopener noreferrer" onClick={() => track('contact', { method: 'whatsapp_central' })}>Conversar pelo WhatsApp</a></p>}
       <ContactForm kind="contato" submitLabel="Enviar mensagem" extra={['company']} />
     </Page>
   );
@@ -114,10 +116,10 @@ export function Contact() {
 
 export function Privacy() {
   return (
-    <Page title="Privacidade e dados pessoais" lede="Como a Dourado trata os dados enviados pela plataforma.">
+    <Page title="Privacidade e dados pessoais" lede="Como a Quero Área trata os dados enviados pela plataforma.">
       <p className="notice">Texto provisório para revisão jurídica.</p>
       <p>Usamos nome, telefone, e-mail e empresa apenas para responder ao seu interesse e apresentar oportunidades compatíveis, com base no seu consentimento. Registramos a origem da visita (campanha e canal) para medir resultados. Endereços IP são guardados apenas como código irreversível.</p>
-      <p>Você pode pedir acesso, correção ou exclusão dos seus dados pelo contato da Dourado. Cliques sem dados pessoais têm a origem anonimizada após 24 meses.</p>
+      <p>Você pode pedir acesso, correção ou exclusão dos seus dados pelo contato da Quero Área. Cliques sem dados pessoais têm a origem anonimizada após 24 meses.</p>
     </Page>
   );
 }

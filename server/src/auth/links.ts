@@ -15,6 +15,6 @@ export async function createAuthLink(userId: string, kind: 'invite' | 'reset', c
 }
 
 export const inviteText = (name: string, url: string) =>
-  `Olá, ${name}.\n\nVocê foi convidado para o painel Dourado Land Intelligence. Defina sua senha neste link (válido por 72 horas):\n\n${url}\n\nSe não esperava este convite, ignore esta mensagem.`;
+  `Olá, ${name}.\n\nVocê foi convidado para o painel Quero Área. Defina sua senha neste link (válido por 72 horas):\n\n${url}\n\nSe não esperava este convite, ignore esta mensagem.`;
 export const resetText = (name: string, url: string) =>
-  `Olá, ${name}.\n\nRecebemos um pedido para redefinir sua senha do painel Dourado Land Intelligence. Use este link (válido por 2 horas):\n\n${url}\n\nSe não foi você, ignore esta mensagem: sua senha continua a mesma.`;
+  `Olá, ${name}.\n\nRecebemos um pedido para redefinir sua senha do painel Quero Área. Use este link (válido por 2 horas):\n\n${url}\n\nSe não foi você, ignore esta mensagem: sua senha continua a mesma.`;

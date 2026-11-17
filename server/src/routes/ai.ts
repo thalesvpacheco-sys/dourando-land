@@ -144,7 +144,7 @@ router.post('/opportunities/:id/whatsapp-message', ah(async (req, res) => {
   const rel = (await loadRelations([o.id])).get(o.id);
   const v = publicView(o, rel);
   const via = Array.isArray(rel.tech.viabilidade?.value) ? rel.tech.viabilidade.value.map((x: string) => VIABILITY[x as Viability]?.toLowerCase()).join(', ') : null;
-  const text = `Olá${b.recipient_name ? `, ${b.recipient_name}` : ''}! Aqui é ${req.user!.name.split(' ')[0]}, da Dourado. Separei uma oportunidade que pode encaixar no seu perfil: ${o.code} — ${v.title}, ${formatArea(o.area_m2)} em ${o.city}/${o.uf}${via ? `, com indicação para ${via}` : ''}. Posso te enviar o book com os detalhes?`;
+  const text = `Olá${b.recipient_name ? `, ${b.recipient_name}` : ''}! Aqui é ${req.user!.name.split(' ')[0]}, da Quero Área. Separei uma oportunidade que pode encaixar no seu perfil: ${o.code} — ${v.title}, ${formatArea(o.area_m2)} em ${o.city}/${o.uf}${via ? `, com indicação para ${via}` : ''}. Posso te enviar o book com os detalhes?`;
   const id = await save(o.org_id, 'whatsapp_message', { text }, 'heuristic', req.user!.id, { opportunity_id: o.id });
   res.json({ id, text, origin: 'heuristic', label: 'Sugestão — revise antes de enviar' });
 }));

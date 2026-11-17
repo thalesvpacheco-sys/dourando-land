@@ -31,7 +31,7 @@ export const config = {
   sessionHours: Number(env.SESSION_HOURS ?? 12),
   cookieSecure: env.COOKIE_SECURE ? env.COOKIE_SECURE === 'true' : isProd,
   smtpUrl: env.SMTP_URL || null,
-  mailFrom: env.MAIL_FROM ?? 'Dourado Land Intelligence <no-reply@douradoimob.com.br>',
+  mailFrom: env.MAIL_FROM ?? 'Quero Área <no-reply@queroarea.com.br>',
   // Build do front servido pela própria API (mesma origem, sem CORS)
   webDist: env.WEB_DIST_DIR ? path.resolve(env.WEB_DIST_DIR) : null,
   // Hosts extras na política de segurança (ex.: provedor de mapas)

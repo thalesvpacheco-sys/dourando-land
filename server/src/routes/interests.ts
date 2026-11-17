@@ -61,7 +61,7 @@ router.post('/:id/reassign', ah(async (req, res) => {
   const b = parse(z.object({ broker_id: z.string().uuid().nullable(), reason: z.string().min(3).max(240) }), req.body);
   const i = await scoped(req, 'update').where('i.id', String(req.params.id)).select('i.*').first();
   if (!i) throw notFound('Interesse');
-  let number: string | null = null, name = 'Atendimento Dourado';
+  let number: string | null = null, name = 'Atendimento Quero Área';
   if (b.broker_id) {
     const br = await db('land_brokers as b').join('users as u', 'u.id', 'b.user_id').where({ 'b.id': b.broker_id, 'b.org_id': req.user!.orgId, 'b.active': true }).select('b.*', 'u.name').first();
     if (!br) throw notFound('Intermediador');

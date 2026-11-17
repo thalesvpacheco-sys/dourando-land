@@ -47,7 +47,7 @@ export default function Detail() {
         if (r.canonical_slug && r.canonical_slug !== slug) nav(`/areas/${r.canonical_slug}`, { replace: true });
         setA(r);
         setFav(!!r.favorite);
-        document.title = `${r.title} — ${r.code} — Dourado`;
+        document.title = `${r.title} — ${r.code} — Quero Área`;
         track('view_item', { item_id: r.code, item_category: r.type });
       })
       .catch((e) => setErr(e instanceof ApiError && e.status === 404 ? 'not_found' : e.message));
@@ -113,7 +113,7 @@ export default function Detail() {
             <div className="row" style={{ marginBottom: '0.6rem' }}>
               <span className="muted">{a.code}</span>
               {st && <span className={`badge dot ${st[0]}`}>{st[1]}</span>}
-              {a.commercial.exclusivity && <span className="badge">Exclusividade Dourado</span>}
+              {a.commercial.exclusivity && <span className="badge">Exclusividade Quero Área</span>}
             </div>
             <h1>{a.title}</h1>
             <p className="muted" style={{ marginTop: '0.5rem', fontSize: 'var(--t1)' }}>
@@ -225,7 +225,7 @@ export default function Detail() {
           </div>
           <button className="btn gold" onClick={() => setInterest('whatsapp')}>Conversar pelo WhatsApp</button>
           <button className="btn ghost" onClick={() => document.getElementById('interesse')?.scrollIntoView({ behavior: 'smooth' })}>Pedir informações por e-mail</button>
-          {a.broker && <p className="small muted" style={{ margin: 0 }}>Atendimento: {a.broker.name}{a.broker.creci ? `, CRECI ${a.broker.creci}` : ''}, intermediação Dourado.</p>}
+          {a.broker && <p className="small muted" style={{ margin: 0 }}>Atendimento: {a.broker.name}{a.broker.creci ? `, CRECI ${a.broker.creci}` : ''}, intermediação Quero Área.</p>}
           <div className="row" style={{ borderTop: '1px solid var(--line-2)', paddingTop: '0.8rem' }}>
             <button className="btn ghost small" onClick={share}>Compartilhar</button>
             <button className="btn ghost small" onClick={copy}>Copiar link</button>
@@ -293,7 +293,7 @@ function WhatsAppModal({ area, onClose }: { area: PublicArea; onClose: () => voi
     <Modal title="Conversar pelo WhatsApp" onClose={onClose}>
       {done ? (
         <div className="stack">
-          <p>{done.url ? `${DEMO ? 'Interesse registrado e encaminhado' : 'Abrimos o WhatsApp'}${done.routed_to ? ` ${DEMO ? 'a' : 'com'} ${done.routed_to}` : ''}. A mensagem já leva o código da área:` : 'Interesse registrado. A equipe Dourado entrará em contato.'}</p>
+          <p>{done.url ? `${DEMO ? 'Interesse registrado e encaminhado' : 'Abrimos o WhatsApp'}${done.routed_to ? ` ${DEMO ? 'a' : 'com'} ${done.routed_to}` : ''}. A mensagem já leva o código da área:` : 'Interesse registrado. A equipe Quero Área entrará em contato.'}</p>
           <blockquote className="notice" style={{ margin: 0 }}>{done.message}</blockquote>
           <p className="small muted">{DEMO ? 'Na demonstração, o WhatsApp não é aberto automaticamente. Use "Simular mensagem no WhatsApp" na barra de demonstração para ver a confirmação chegar ao painel.' : 'Se o WhatsApp não abriu, use o botão abaixo. Envie a mensagem para que o atendimento identifique a área.'}</p>
           <div className="row">{done.url && <a className="btn gold" href={done.url} target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a>}<button className="btn ghost" onClick={onClose}>Fechar</button></div>
@@ -306,7 +306,7 @@ function WhatsAppModal({ area, onClose }: { area: PublicArea; onClose: () => voi
             <Field label="Telefone com DDD"><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" inputMode="tel" /></Field>
           </div>
           <Field label="Empresa"><input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} autoComplete="organization" /></Field>
-          <label className="check"><input type="checkbox" checked={form.consent} onChange={(e) => setForm({ ...form, consent: e.target.checked })} /><span>Autorizo a Dourado a usar estes dados para contato sobre esta e outras oportunidades. <Link to="/privacidade" target={NEW_TAB}>Como tratamos seus dados</Link>.</span></label>
+          <label className="check"><input type="checkbox" checked={form.consent} onChange={(e) => setForm({ ...form, consent: e.target.checked })} /><span>Autorizo a Quero Área a usar estes dados para contato sobre esta e outras oportunidades. <Link to="/privacidade" target={NEW_TAB}>Como tratamos seus dados</Link>.</span></label>
           {err && <p className="error-text" role="alert">{err}</p>}
           <div className="row">
             <button className="btn gold" disabled={busy} onClick={() => go(true)}>{busy ? 'Abrindo…' : hasData ? 'Enviar dados e abrir WhatsApp' : 'Abrir WhatsApp'}</button>
@@ -343,7 +343,7 @@ function InterestForm({ area }: { area: PublicArea }) {
         <Field label="Telefone com DDD"><input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} autoComplete="tel" inputMode="tel" /></Field>
       </div>
       <Field label="O que você precisa saber"><textarea value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} placeholder="Ex.: tipologia pretendida, prazo, interesse em permuta" /></Field>
-      <label className="check"><input type="checkbox" checked={f.consent} onChange={(e) => setF({ ...f, consent: e.target.checked })} /><span>Autorizo a Dourado a usar estes dados para contato sobre oportunidades. <Link to="/privacidade" target={NEW_TAB}>Como tratamos seus dados</Link>.</span></label>
+      <label className="check"><input type="checkbox" checked={f.consent} onChange={(e) => setF({ ...f, consent: e.target.checked })} /><span>Autorizo a Quero Área a usar estes dados para contato sobre oportunidades. <Link to="/privacidade" target={NEW_TAB}>Como tratamos seus dados</Link>.</span></label>
       {err && <p className="error-text" role="alert">{err}</p>}
       <div><button className="btn" disabled={state === 'busy'}>{state === 'busy' ? 'Enviando…' : 'Enviar pedido de informações'}</button></div>
     </form>

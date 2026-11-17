@@ -204,12 +204,12 @@ function routeInterest(o: Row) {
       const pool = T('land_brokers').filter((b) => r.broker_ids.includes(b.id) && eligible(b)).sort((a, b) => (a.last_routed_at ?? '').localeCompare(b.last_routed_at ?? ''));
       if (pool[0]) { pool[0].last_routed_at = now(); return { broker_id: pool[0].id, broker_name: bname(pool[0]), number: normalizePhone(pool[0].whatsapp), via: `regra: ${r.name} (rodízio)`, rule_id: r.id, sla: r.sla_minutes }; }
     } else if (r.target === 'central' && central) {
-      return { broker_id: null, broker_name: 'Atendimento Dourado', number: central, via: `regra: ${r.name}`, rule_id: r.id, sla: r.sla_minutes };
+      return { broker_id: null, broker_name: 'Atendimento Quero Área', number: central, via: `regra: ${r.name}`, rule_id: r.id, sla: r.sla_minutes };
     }
   }
   const b = assigned();
   if (b) return { broker_id: b.id, broker_name: bname(b), number: normalizePhone(b.whatsapp), via: 'intermediador atribuído', rule_id: null, sla: 60 };
-  return { broker_id: null, broker_name: central ? 'Atendimento Dourado' : null, number: central, via: 'fallback: número central', rule_id: null, sla: 60 };
+  return { broker_id: null, broker_name: central ? 'Atendimento Quero Área' : null, number: central, via: 'fallback: número central', rule_id: null, sla: 60 };
 }
 
 function crmUpsertContact(orgId: string, p: Row) {
@@ -731,7 +731,7 @@ on('POST', '/api/interests/:id/reassign', ({ u, params, body: b }) => {
   need(u, 'routing', 'update'); const i = getInterest(u, params.id, 'update');
   if (!b.reason || b.reason.length < 3) throw bad('Informe o motivo');
   const br = b.broker_id ? one('land_brokers', (x) => x.id === b.broker_id) : null;
-  const name = br ? one('users', (x) => x.id === br.user_id)!.name : 'Atendimento Dourado';
+  const name = br ? one('users', (x) => x.id === br.user_id)!.name : 'Atendimento Quero Área';
   const number = br ? normalizePhone(br.whatsapp) : normalizePhone(one('organizations', (x) => x.id === i.org_id)!.central_whatsapp);
   ins('interest_events', { interest_id: i.id, type: 'reassigned', user_id: u!.id, payload: { from: i.broker_id, to: b.broker_id, to_name: name, reason: b.reason } });
   upd(i, { broker_id: b.broker_id, routed_to_number: number, routed_via: 'transferência manual' });
@@ -1106,7 +1106,7 @@ on('POST', '/api/ai/opportunities/:id/whatsapp-message', ({ u, params, body }) =
   need(u, 'ai', 'create'); const o = getOpp(u, params.id); const r = rel(o.id); const v = publicView(o, r);
   const via = Array.isArray(r.tech.viabilidade?.value) ? r.tech.viabilidade.value.join(', ').replace(/_/g, ' ') : null;
   const area = o.area_m2 >= 10000 ? `${(o.area_m2 / 10000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha` : `${Math.round(o.area_m2)} m²`;
-  const text = `Olá${body.recipient_name ? `, ${body.recipient_name}` : ''}! Aqui é ${u!.name.split(' ')[0]}, da Dourado. Separei uma oportunidade que pode encaixar no seu perfil: ${o.code} — ${v.title}, ${area} em ${o.city}/${o.uf}${via ? `, com indicação para ${via}` : ''}. Posso te enviar o book com os detalhes?`;
+  const text = `Olá${body.recipient_name ? `, ${body.recipient_name}` : ''}! Aqui é ${u!.name.split(' ')[0]}, da Quero Área. Separei uma oportunidade que pode encaixar no seu perfil: ${o.code} — ${v.title}, ${area} em ${o.city}/${o.uf}${via ? `, com indicação para ${via}` : ''}. Posso te enviar o book com os detalhes?`;
   return { id: uuid(), text, origin: 'heuristic', label: 'Sugestão — revise antes de enviar' };
 });
 on('POST', '/api/ai/negotiations/:id/summary', ({ u, params }) => {

@@ -49,10 +49,10 @@ export async function routeInterest(trx: Knex, o: { id: string; org_id: string; 
         return { broker_id: b.id, broker_name: b.name, number: normalizePhone(b.whatsapp), via: `regra: ${r.name} (rodízio)`, rule_id: r.id, sla_minutes: r.sla_minutes };
       }
     } else if (r.target === 'central' && central) {
-      return { broker_id: null, broker_name: 'Atendimento Dourado', number: central, via: `regra: ${r.name}`, rule_id: r.id, sla_minutes: r.sla_minutes };
+      return { broker_id: null, broker_name: 'Atendimento Quero Área', number: central, via: `regra: ${r.name}`, rule_id: r.id, sla_minutes: r.sla_minutes };
     }
   }
   const b = await assigned();
   if (b) return { broker_id: b.id, broker_name: b.name, number: normalizePhone(b.whatsapp), via: 'intermediador atribuído', rule_id: null, sla_minutes: 60 };
-  return { broker_id: null, broker_name: central ? 'Atendimento Dourado' : null, number: central, via: 'fallback: número central', rule_id: null, sla_minutes: 60 };
+  return { broker_id: null, broker_name: central ? 'Atendimento Quero Área' : null, number: central, via: 'fallback: número central', rule_id: null, sla_minutes: 60 };
 }

@@ -150,7 +150,7 @@ router.post('/users', ah(async (req, res) => {
     }
     return { u, link: await createAuthLink(u.id, 'invite', req.user!.id, trx) };
   });
-  const emailed = await sendMail(email, 'Convite — Dourado Land Intelligence', inviteText(out.u.name, out.link.url));
+  const emailed = await sendMail(email, 'Convite — Quero Área', inviteText(out.u.name, out.link.url));
   await audit(req, 'user.invite', 'users', out.u.id, { role: b.role, email_sent: emailed });
   res.status(201).json({ id: out.u.id, invite_url: out.link.url, expires_at: out.link.expires_at, email_sent: emailed });
 }));
@@ -211,7 +211,7 @@ router.post('/users/:id/link', ah(async (req, res) => {
   if (!ASSIGNABLE[req.user!.role]?.includes(u.role)) throw forbidden('Seu perfil não pode alterar este usuário');
   const kind = u.password_hash ? 'reset' : 'invite';
   const link = await createAuthLink(u.id, kind, req.user!.id);
-  const emailed = await sendMail(u.email, kind === 'invite' ? 'Convite — Dourado Land Intelligence' : 'Redefinir senha — Dourado Land Intelligence', (kind === 'invite' ? inviteText : resetText)(u.name, link.url));
+  const emailed = await sendMail(u.email, kind === 'invite' ? 'Convite — Quero Área' : 'Redefinir senha — Quero Área', (kind === 'invite' ? inviteText : resetText)(u.name, link.url));
   await audit(req, `user.${kind}_link`, 'users', u.id, { email_sent: emailed });
   res.json({ kind, url: link.url, expires_at: link.expires_at, email_sent: emailed });
 }));
@@ -322,7 +322,7 @@ router.get('/integrations/status', ah(async (req, res) => {
       { key: 'identity', name: 'Login e usuários', status: 'implemented', detail: config.enableDevLogin ? 'Login próprio; seletor de demonstração ativo (somente desenvolvimento)' : `Login próprio com senha${config.requireMfa ? ' e duas etapas para administradores' : ''}` },
       { key: 'crm', name: 'WingsBr CRM / Leads Hub', status: crmMode() === 'http' ? 'implemented' : 'simulated', detail: crmMode() === 'http' ? 'Entrega HTTP assinada com outbox' : 'Modo embutido: sem WINGSBR_CRM_URL, contatos ficam em espelho local de desenvolvimento' },
       { key: 'whatsapp_link', name: 'WhatsApp — link contextual', status: 'implemented', detail: 'wa.me com mensagem e token de referência' },
-      { key: 'whatsapp_webhook', name: 'WhatsApp Business Platform — webhook', status: config.waAppSecret === 'dev-app-secret' ? 'pending' : 'implemented', detail: 'Endpoint /webhooks/whatsapp pronto; requer app e número oficiais da Dourado' },
+      { key: 'whatsapp_webhook', name: 'WhatsApp Business Platform — webhook', status: config.waAppSecret === 'dev-app-secret' ? 'pending' : 'implemented', detail: 'Endpoint /webhooks/whatsapp pronto; requer app e número oficiais da Quero Área' },
       { key: 'postgis', name: 'PostGIS', status: 'implemented', detail: 'Área/perímetro geodésicos, ponto público ofuscado, filtro por região' },
       { key: 'maps', name: 'Mapa de satélite', status: process.env.VITE_SATELLITE_TILES || process.env.MAPBOX_TOKEN ? 'implemented' : 'pending', detail: process.env.VITE_SATELLITE_TILES ? 'Provedor configurado' : process.env.MAPBOX_TOKEN ? `Mapbox Satellite pelo servidor (token protegido, teto de ${Number(process.env.MAPBOX_DAILY_LIMIT ?? 6000).toLocaleString('pt-BR')} blocos/dia)` : 'Criar conta na Mapbox e preencher MAPBOX_TOKEN. Até lá, o mapa usa a base própria (contornos de UF).' },
       { key: 'terrain3d', name: 'Relevo 3D nos mapas', status: 'implemented', detail: 'Botão 2D/3D em todos os mapas, com modelo de elevação aberto (AWS Terrain Tiles), sem custo' },

@@ -199,7 +199,7 @@ router.post('/password/forgot', linkLimiter, ah(async (req, res) => {
   // Mesma resposta exista ou não a conta. Sem SMTP, o administrador gera o link em Usuários.
   if (u?.password_hash) {
     const link = await createAuthLink(u.id, 'reset', null);
-    await sendMail(u.email, 'Redefinir senha — Dourado Land Intelligence', resetText(u.name, link.url));
+    await sendMail(u.email, 'Redefinir senha — Quero Área', resetText(u.name, link.url));
     await logEvent(req, 'auth.reset_requested', u);
   }
   res.json({ ok: true });

@@ -271,7 +271,7 @@ router.get('/:id/dxf', ah(async (req, res) => {
 
 router.get('/:id/kml', ah(async (req, res) => {
   const p = await getProspect(req, String(req.params.id));
-  const kml = toKml({ name: `${p.code} — ${p.title}`, description: `Prospecção Dourado. ${p.city ?? ''}/${p.uf ?? ''} ${p.area_m2 ? formatArea(p.area_m2) : ''}`, geometry: p.geometry, point: p.lng != null ? [p.lng, p.lat] : undefined });
+  const kml = toKml({ name: `${p.code} — ${p.title}`, description: `Prospecção Quero Área. ${p.city ?? ''}/${p.uf ?? ''} ${p.area_m2 ? formatArea(p.area_m2) : ''}`, geometry: p.geometry, point: p.lng != null ? [p.lng, p.lat] : undefined });
   await audit(req, 'export.kml', 'land_prospects', p.id);
   res.type('application/vnd.google-earth.kml+xml').attachment(`${p.code}.kml`).send(kml);
 }));

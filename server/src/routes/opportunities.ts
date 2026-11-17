@@ -241,7 +241,7 @@ router.get('/:id/kml', ah(async (req, res) => {
   requireScope(req, 'exact_location', 'read');
   const o = await getScopedOpportunity(req, String(req.params.id));
   const g = await db('land_geometries').where({ opportunity_id: o.id, is_current: true }).select(db.raw('ST_AsGeoJSON(geom, 7)::json as geometry')).first();
-  const kml = toKml({ name: `${o.code} — ${o.public_title ?? o.internal_name}`, description: `Dourado Real Estate Partners. ${o.city}/${o.uf}, ${formatArea(o.area_m2)}.`, geometry: g?.geometry, point: o.lng != null ? [o.lng, o.lat] : undefined });
+  const kml = toKml({ name: `${o.code} — ${o.public_title ?? o.internal_name}`, description: `Quero Área. ${o.city}/${o.uf}, ${formatArea(o.area_m2)}.`, geometry: g?.geometry, point: o.lng != null ? [o.lng, o.lat] : undefined });
   await audit(req, 'export.kml', 'land_opportunities', o.id);
   res.type('application/vnd.google-earth.kml+xml').attachment(`${o.code}.kml`).send(kml);
 }));

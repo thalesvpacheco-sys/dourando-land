@@ -81,7 +81,7 @@ export default function Book() {
         <div className="stack">
           {a.media.slice(1, 3).map((m) => <img key={m.id} src={m.url} alt={m.caption ?? ''} style={{ borderRadius: 4, height: '62mm', objectFit: 'cover', width: '100%' }} />)}
           <div className="notice" style={{ fontSize: '10pt' }}>
-            Atendimento {a.broker ? `com ${a.broker.name}${a.broker.creci ? `, CRECI ${a.broker.creci}` : ''}` : 'Dourado'}. Para matrícula, certidões e estudos completos, solicite pelo código {a.code}.
+            Atendimento {a.broker ? `com ${a.broker.name}${a.broker.creci ? `, CRECI ${a.broker.creci}` : ''}` : 'Quero Área'}. Para matrícula, certidões e estudos completos, solicite pelo código {a.code}.
           </div>
         </div>
         {foot(3)}
